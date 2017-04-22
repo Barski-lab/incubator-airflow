@@ -245,6 +245,8 @@ def do_setup():
             'tabulate>=0.7.5, <0.8.0',
             'thrift>=0.9.2, <0.10',
             'zope.deprecation>=4.0, <5.0',
+            'cwltool<=1.0.20170224141733',
+            'jsonmerge'
         ],
         extras_require={
             'all': devel_all,
@@ -287,6 +289,7 @@ def do_setup():
             'webhdfs': webhdfs,
             'jira': jira,
             'redis': redis,
+            'mysql-python': 'mysql-python>=1.2.5'
         },
         classifiers=[
             'Development Status :: 5 - Production/Stable',
@@ -308,6 +311,11 @@ def do_setup():
             'test': Tox,
             'extra_clean': CleanCommand,
         },
+        entry_points={
+            'console_scripts': [
+                "cwl-runner=airflow.cwl_runner.main:main"
+            ]
+        }
     )
 
 
