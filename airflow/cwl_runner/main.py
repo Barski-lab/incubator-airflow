@@ -136,7 +136,7 @@ def print_workflow_output (args):
                 continue
             if found_output:
                 results = results + line.split('Subtask: ')[1]
-    print results
+    print results.rstrip('\n')
 
 
 def run_job (**kwargs):
