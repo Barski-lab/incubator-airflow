@@ -34,6 +34,7 @@ from airflow.cwl_runner.cwldag import CWLDAG
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
 from airflow.cwl_runner.jobcleanup import JobCleanup
 from airflow.cwl_runner.cwlutils import conf_get_default
+from airflow import models, settings
 restore_stdout()
 
 
@@ -82,7 +83,15 @@ def gen_uid (job_file):
 
 
 def gen_dag_id (workflow_file, job_file):
-    return ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(job_file)
+    dag_id = ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(job_file)
+    duplicate_dag_id = [dag_run.dag_id for dag_run in settings.Session().query(models.DagRun).filter(models.DagRun.dag_id.like(dag_id+'%'))]
+    if dag_id not in duplicate_dag_id:
+        return dag_id
+    else:
+        sufix = 1
+        while dag_id+'_'+str(sufix) in duplicate_dag_id:
+            sufix = sufix+1
+        return dag_id+'_'+str(sufix)
 
 
 def eval_log_level(key):
@@ -117,13 +126,17 @@ def clear_previous_log (args):
 
 def print_workflow_output (args):
     found_output = False
+    results = ''
     with open(get_log_filename(args), 'r') as results_file:
         for line in results_file.readlines():
             if 'Subtask:' not in line: continue
             if 'WORKFLOW RESULTS' in line:
                 found_output = True
+                results = ''
                 continue
-            if found_output: print line.split('Subtask: ')[1].rstrip()
+            if found_output:
+                results = results + line.split('Subtask: ')[1]
+    print results
 
 
 def run_job (**kwargs):
@@ -134,7 +147,7 @@ def run_job (**kwargs):
     create_backup(kwargs)
     try:
         args = Namespace (**kwargs)
-        clear_previous_log(args)
+        # clear_previous_log(args)
         if args.quiet:
             suppress_stdout()
         backfill (args)
