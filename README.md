@@ -68,6 +68,78 @@ unit of work and continuity.
 - **Code View**:  Quick way to view source code of a DAG.
 ![](/docs/img/code.png)
 
+## CWL support
+
+Airflow supports running CWL descriptor files in two following modes:
+- Manual (user specifies CWL descriptor and input parameters files explicitly)
+- Batch processing (user set the path to CWL descriptor and input parameters files)
+
+This functionality is implemented within two additional packages `cwl_runner` and `cwl_dag` to support manual and batch processing correspondingly. Internally both of them call functions from `cwltool` reference implementation to run each step of workflow separately. But the order of step running, transferring the data between steps and collecting results are implemented by means of Airflow.
+### Manual running
+To run some specific CWL descriptor file with an input parameters file `airflow-cwl-runner` script should be used. It inherits all arguments from `airflow backfill` command with the following additional ones.
+
+Positional arguments:
+```
+workflow - path to CWL descriptor file
+job      - path to input parameters file
+```
+Optional arguments:
+```
+--outdir            OUTDIR            Output folder to save results
+--tmp-folder        TMP_FOLDER        Temp folder to store intermediate data
+                                      between airflow tasks/steps execution
+--tmpdir-prefix     TMPDIR_PREFIX     Path prefix for temporary directories
+--tmp-outdir-prefix TMP_OUTDIR_PREFIX Path prefix for intermediate output directories
+--quiet                               Print only workflow execution results
+--ignore-def-outdir                   Disable default output directory to be set to
+                                      current directory. Use OUTPUT_FOLDER from
+                                      Airflow configuration file instead
+```
+
+Example:
+```
+airflow-cwl-runner --quiet workflow.cwl parameters.json
+```
+
+### Batch processing
+To process a group of input parameters files with  correspondent CWL descriptor files using
+`airflow scheduler` some additional configuration should be added into `airflow.cfg` file.
+
+Update
+```
+[core]
+dags_are_paused_at_creation = False
+load_examples               = False
+```
+Add
+```
+[biowardrobe]
+cwl_jobs        = absolute path to input parameter files folder. Required
+cwl_workflows   = absolute path to workflow descriptor files folder. Required
+output_folder   = absolute path to output results folder. Optional (default: current working directory)
+tmp_folder      = absolute path to temporary calculation folder. Optional (default: random generated in OS temp folder)
+max_jobs_to_run = maximum number of jobs to be processed at the same time, int. Optional (default: 1)
+log_level       = log level, [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]. Optional (default: INFO)
+strict          = enable strict validation, boolean. Optional (default: False)
+```
+
+To allow automatically fetch CWL descriptor file on the base of the input parameters file,
+the folowing naming rule should be implemented:
+```
+XXXXXXX.cwl         - workflow descriptor name
+XXXXXXX-id.json     - input parameters files
+where XXXXXXX, id   - any allowed by OS set of symbols to define filename
+```
+
+To run `airflow scheduler` with CWL support `--subdir` parameter should point to folder with `cwl_dag.py` file (which is by default in `airflow.cwl_dag` package).
+Airflow will automatically read input parameters files from ***cwl_jobs*** folder,
+search for correspondent CWL descriptor files in ***cwl_workflows*** folder,
+run it and put results in a subdirectory of ***output_folder***
+
+
+
+
+
 ## Who uses Airflow?
 
 As the Airflow community grows, we'd like to keep track of who is using
