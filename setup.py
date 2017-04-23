@@ -313,6 +313,7 @@ def do_setup():
         },
         entry_points={
             'console_scripts': [
+                "airflow-cwl-runner=airflow.cwl_runner.main:main",
                 "cwl-runner=airflow.cwl_runner.main:main"
             ]
         }

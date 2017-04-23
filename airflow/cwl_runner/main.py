@@ -51,16 +51,17 @@ def arg_parser():
     parser.add_argument("-i", "--ignore_dependencies", help="Skip upstream tasks, run only the tasks matching the regexp. Only works in conjunction with task_regex", action="store_true")
     parser.add_argument("-I", "--ignore_first_depends_on_past", help="Ignores depends_on_past dependencies for the first set of tasks only (subsequent executions in the backfill DO respect depends_on_past).", action="store_true")
     parser.add_argument("--pool", help="Resource pool to use")
+    parser.add_argument("-dr", "--dry_run", help="Perform a dry run", action="store_true")
+    #FROM CWLTOOL
     parser.add_argument("--outdir", help="Output folder to save results")
     parser.add_argument("--tmp-folder", help="Temp folder to store data between execution of airflow tasks/steps")
     parser.add_argument("--tmpdir-prefix", help="Path prefix for temporary directories")
     parser.add_argument("--tmp-outdir-prefix", help="Path prefix for intermediate output directories")
     parser.add_argument("--quiet", action="store_true", help="Print only workflow execultion results")
-    parser.add_argument("--ignore-def-outdir", action="store_true", help="Disable default output directory to be set to current directory. Use OUTPUT_FOLDER from Airflow configuration file instead")
-
-    parser.add_argument("-dr", "--dry_run", help="Perform a dry run", action="store_true")
     parser.add_argument("workflow", type=Text)
     parser.add_argument("job", type=Text)
+    # ADDITIONAL
+    parser.add_argument("--ignore-def-outdir", action="store_true", help="Disable default output directory to be set to current directory. Use OUTPUT_FOLDER from Airflow configuration file instead")
     return parser
 
 def create_backup(args):
@@ -245,8 +246,6 @@ def make_dag(args):
         'rdf_serializer': None,
         'basedir': basedir,
         'tool_help': False,
-        # 'workflow': None,
-        # 'job_order': None,
         'pack': False,
         'on_error': 'continue',
         'relax_path_checks': False,

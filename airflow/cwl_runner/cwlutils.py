@@ -7,8 +7,8 @@ from airflow.configuration import conf
 from airflow.exceptions import AirflowConfigException
 
 def shortname(n):
-    # return n.split("#")[-1].split("/")[-1]  # What if we have two outputs from the different tools with the same name?
-    return n.split("#")[-1]                   # It looks like we don't need to cut by "/"
+    # return n.split("#")[-1].split("/")[-1]
+    return n.split("#")[-1]
 
 def flatten(input_list):
     result = []

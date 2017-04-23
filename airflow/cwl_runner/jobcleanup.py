@@ -37,7 +37,6 @@ class JobCleanup(BaseOperator):
 
         logging.info('{0}: Collecting outputs from: \n {1}'.format(self.task_id, json.dumps(upstream_task_ids, indent=4)))
 
-
         promises = {}
         for j in upstream_data:
             data = j
