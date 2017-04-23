@@ -46,7 +46,7 @@ def fail_callback(context):
 def gen_uid (job_file):
     with open(job_file, 'r') as f:
         job = yaml.safe_load(f)
-    return job.get("uid", '.'.join(job_file.split("/")[-1].split('.')[0:-1]).split("-")[-1])
+    return job.get("uid", '.'.join(job_file.split("/")[-1].split('.')[0:-1]))
 
 
 def gen_dag_id (workflow_file, job_file):

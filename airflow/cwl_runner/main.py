@@ -9,7 +9,6 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime
-from airflow.cwl_runner.cwlutils import conf_get_default
 
 
 def suppress_stdout():
@@ -34,6 +33,7 @@ from airflow.configuration import conf
 from airflow.cwl_runner.cwldag import CWLDAG
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
 from airflow.cwl_runner.jobcleanup import JobCleanup
+from airflow.cwl_runner.cwlutils import conf_get_default
 restore_stdout()
 
 
@@ -78,7 +78,7 @@ def read_backup():
 def gen_uid (job_file):
     with open(job_file, 'r') as f:
         job = yaml.safe_load(f)
-    return job.get("uid", '.'.join(job_file.split("/")[-1].split('.')[0:-1]).split("-")[-1])
+    return job.get("uid", '.'.join(job_file.split("/")[-1].split('.')[0:-1]))
 
 
 def gen_dag_id (workflow_file, job_file):
