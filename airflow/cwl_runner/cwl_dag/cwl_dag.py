@@ -3,16 +3,16 @@ import sys
 
 from airflow.configuration import conf
 from datetime import datetime
-from biow_cwl_runner.cwldag import CWLDAG
-from biow_cwl_runner.jobdispatcher import JobDispatcher
-from biow_cwl_runner.jobcleanup import JobCleanup
+from airflow.cwl_runner.cwldag import CWLDAG
+from airflow.cwl_runner.jobdispatcher import JobDispatcher
+from airflow.cwl_runner.jobcleanup import JobCleanup
 import glob
 import os
 import shutil
 import ruamel.yaml as yaml
 import logging
 import tempfile
-from biow_cwl_runner.cwlutils import conf_get_default, get_only_file
+from airflow.cwl_runner.cwlutils import conf_get_default, get_only_file
 
 
 def get_max_jobs_to_run():
