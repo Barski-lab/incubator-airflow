@@ -6,6 +6,7 @@ from jsonmerge import merge
 import cwltool.errors
 import shutil
 import json
+import stat
 
 class JobCleanup(BaseOperator):
 
@@ -74,7 +75,7 @@ class JobCleanup(BaseOperator):
                         if os.path.exists(dst):
                             os.remove(dst) if promises[out]["class"] == 'File' else shutil.rmtree (dst, True)
                         shutil.move(src, dst)
-                        # os.chmod(dst, stat.S_IWGRP) # group has write permission Why do we need it?
+                        os.chmod(dst, stat.S_IWGRP) # group has write permission
 
         for rmf in self.rm_files:
             if os.path.isfile(rmf):
