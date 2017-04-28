@@ -18,6 +18,7 @@ from setuptools.command.test import test as TestCommand
 import imp
 import logging
 import os
+import pip
 import sys
 
 logger = logging.getLogger(__name__)
@@ -68,10 +69,10 @@ def git_version(version):
         import git
         repo = git.Repo('.git')
     except ImportError:
-        logger.warn('gitpython not found: Cannot compute the git version.')
+        logger.warning('gitpython not found: Cannot compute the git version.')
         return ''
     except Exception as e:
-        logger.warn('Git repo not found: Cannot compute the git version.')
+        logger.warning('Git repo not found: Cannot compute the git version.')
         return ''
     if repo:
         sha = repo.head.commit.hexsha
@@ -99,11 +100,21 @@ def write_version(filename=os.path.join(*['airflow',
         a.write(text)
 
 
+def check_previous():
+    installed_packages = ([package.project_name for package
+                           in pip.get_installed_distributions()])
+    if 'airflow' in installed_packages:
+        print("An earlier non-apache version of Airflow was installed, "
+              "please uninstall it first. Then reinstall.")
+        sys.exit(1)
+
+
 async = [
     'greenlet>=0.4.9',
     'eventlet>= 0.9.7',
     'gevent>=0.13'
 ]
+azure = ['azure-storage>=0.34.0']
 celery = [
     'celery>=3.1.17',
     'flower>=0.7.3'
@@ -112,6 +123,10 @@ cgroups = [
     'cgroupspy>=0.1.4',
 ]
 crypto = ['cryptography>=0.9.3']
+dask = [
+    'distributed>=1.15.2, <2'
+    ]
+databricks = ['requests>=2.5.1, <3']
 datadog = ['datadog>=0.14.0']
 doc = [
     'sphinx>=1.2.3',
@@ -165,6 +180,7 @@ password = [
 github_enterprise = ['Flask-OAuthlib>=0.9.1']
 qds = ['qds-sdk>=1.9.0']
 cloudant = ['cloudant>=0.5.9,<2.0'] # major update coming soon, clamp to 0.x
+redis = ['redis>=2.10.5']
 
 all_dbs = postgres + mysql + hive + mssql + hdfs + vertica + cloudant
 devel = [
@@ -177,6 +193,8 @@ devel = [
     'nose',
     'nose-ignore-docstring==0.2',
     'nose-parameterized',
+    'nose-timer',
+    'rednose'
 ]
 devel_minreq = devel + mysql + doc + password + s3 + cgroups
 devel_hadoop = devel_minreq + hive + hdfs + webhdfs + kerberos
@@ -184,9 +202,10 @@ devel_all = devel + all_dbs + doc + samba + s3 + slack + crypto + oracle + docke
 
 
 def do_setup():
+    check_previous()
     write_version()
     setup(
-        name='airflow',
+        name='apache-airflow',
         description='Programmatically author, schedule and monitor data pipelines',
         license='Apache License 2.0',
         version=version,
@@ -197,6 +216,8 @@ def do_setup():
         scripts=['airflow/bin/airflow'],
         install_requires=[
             'alembic>=0.8.3, <0.9',
+            'bleach==2.0.0',
+            'configparser>=3.5.0, <3.6.0',
             'croniter>=0.3.8, <0.4',
             'dill>=0.2.2, <0.3',
             'flask>=0.11, <0.12',
@@ -206,7 +227,7 @@ def do_setup():
             'flask-swagger==0.2.13',
             'flask-wtf==0.12',
             'funcsigs==1.0.0',
-            'future>=0.15.0, <0.16',
+            'future>=0.16.0, <0.17',
             'gitpython>=2.0.2',
             'gunicorn>=19.3.0, <19.4.0',  # 19.4.? seemed to have issues
             'jinja2>=2.7.3, <2.9.0',
@@ -224,15 +245,20 @@ def do_setup():
             'tabulate>=0.7.5, <0.8.0',
             'thrift>=0.9.2, <0.10',
             'zope.deprecation>=4.0, <5.0',
+            'cwltool<=1.0.20170224141733',
+            'jsonmerge'
         ],
         extras_require={
             'all': devel_all,
             'all_dbs': all_dbs,
             'async': async,
+            'azure': azure,
             'celery': celery,
             'cgroups': cgroups,
             'cloudant': cloudant,
             'crypto': crypto,
+            'dask': dask,
+            'databricks': databricks,
             'datadog': datadog,
             'devel': devel_minreq,
             'devel_hadoop': devel_hadoop,
@@ -262,6 +288,8 @@ def do_setup():
             'vertica': vertica,
             'webhdfs': webhdfs,
             'jira': jira,
+            'redis': redis,
+            'mysql-python': 'mysql-python>=1.2.5'
         },
         classifiers=[
             'Development Status :: 5 - Production/Stable',
@@ -283,6 +311,12 @@ def do_setup():
             'test': Tox,
             'extra_clean': CleanCommand,
         },
+        entry_points={
+            'console_scripts': [
+                "airflow-cwl-runner=airflow.cwl_runner.main:main",
+                "cwl-runner=airflow.cwl_runner.main:main"
+            ]
+        }
     )
 
 
