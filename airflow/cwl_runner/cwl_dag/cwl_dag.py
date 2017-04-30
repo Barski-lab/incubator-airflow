@@ -66,13 +66,15 @@ def make_dag(job_file, workflow_file):
     output_folder = output_folder if os.path.isabs(output_folder) else os.path.normpath(os.path.join(basedir, output_folder))
 
     if not os.path.exists(output_folder):
-        os.makedirs(output_folder, 0777)
+        os.makedirs(output_folder)
+        os.chmod(output_folder, 0775)
 
     tmp_folder = job.get('tmp_folder', conf_get_default('biowardrobe', 'TMP_FOLDER', tempfile.mkdtemp()))
     tmp_folder = tmp_folder if os.path.isabs(tmp_folder) else os.path.normpath(os.path.join(basedir, tmp_folder))
 
     if not os.path.exists(tmp_folder):
-        os.makedirs(tmp_folder, 0777)
+        os.makedirs(tmp_folder)
+        os.chmod(tmp_folder, 0755)
 
     owner = job.get('author', 'biowardrobe')
 

@@ -75,7 +75,7 @@ class JobCleanup(BaseOperator):
                         if os.path.exists(dst):
                             os.remove(dst) if promises[out]["class"] == 'File' else shutil.rmtree (dst, True)
                         shutil.move(src, dst)
-                        os.chmod(dst, stat.S_IWGRP) # group has write permission
+                        os.chmod(dst, 0775) if promises[out]["class"] == 'Directory' else os.chmod(dst, 0664)
 
         for rmf in self.rm_files:
             if os.path.isfile(rmf):

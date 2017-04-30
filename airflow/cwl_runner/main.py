@@ -210,10 +210,12 @@ def make_dag(args):
     tmpdir_prefix = get_tmpdir_prefix (args, job_entry, job)
 
     if not os.path.exists(output_folder):
-        os.makedirs(output_folder, 0777)
+        os.makedirs(output_folder)
+        os.chmod(output_folder, 0775)
 
     if not os.path.exists(tmp_folder):
-        os.makedirs(tmp_folder, 0777)
+        os.makedirs(tmp_folder)
+        os.chmod(tmp_folder, 0755)
 
     owner = job_entry.get('author', 'biowardrobe')
 
