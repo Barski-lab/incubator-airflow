@@ -31,5 +31,9 @@ def conf_get_default (section, key, default):
         return default
 
 
-def get_only_file (folder):
-    return [filename for filename in glob.iglob(folder+"/*") if os.path.isfile(filename)]
+def get_only_files (jobs, key):
+    key_filtered = []
+    for item in jobs:
+        key_filtered.extend([filename for filename in glob.iglob(item[key]+"/*") if os.path.isfile(filename)])
+    return key_filtered
+

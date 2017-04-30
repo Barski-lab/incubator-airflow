@@ -12,8 +12,7 @@ import shutil
 import ruamel.yaml as yaml
 import logging
 import tempfile
-from airflow.cwl_runner.cwlutils import conf_get_default, get_only_file
-
+from airflow.cwl_runner.cwlutils import conf_get_default, get_only_files
 
 def get_max_jobs_to_run():
     try:
@@ -50,7 +49,8 @@ def gen_uid (job_file):
 
 
 def gen_dag_id (workflow_file, job_file):
-    return ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(job_file)
+    return ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(
+        job_file) + "-" + datetime.fromtimestamp(os.path.getctime(job_file)).isoformat().replace(':', '-')
 
 
 def make_dag(job_file, workflow_file):
@@ -129,7 +129,11 @@ def make_dag(job_file, workflow_file):
         default_args=default_args)
     dag.create()
     dag.assign_job_dispatcher(JobDispatcher(task_id="read", read_file=job_file, dag=dag))
-    dag.assign_job_cleanup(JobCleanup(task_id="cleanup", outputs=dag.get_output_list(), rm_files=[job_file], rm_files_dest_folder=folder_success, dag=dag))
+    dag.assign_job_cleanup(JobCleanup(task_id="cleanup",
+                                      outputs=dag.get_output_list(),
+                                      rm_files=[job_file],
+                                      rm_files_dest_folder=os.path.join('/'.join(job_file.split('/')[0:-2]), 'success'),
+                                      dag=dag))
     globals()[dag_id] = dag
 
 
@@ -145,39 +149,42 @@ def find_workflow(job_filename):
         raise ValueError
 
 
+def get_jobs_folder_structure(monitor_folder):
+    jobs = []
+    for root, dirs, files in os.walk(monitor_folder):
+        if 'new' in dirs:
+            job_rec = { "new": os.path.join(root, "new"),
+                        "running": os.path.join(root, "running"),
+                        "fail": os.path.join(root, "fail"),
+                        "success": os.path.join(root, "success")}
+            for key,value in job_rec.iteritems():
+                if not os.path.exists(value):
+                    raise ValueError("Failed to find {}".format(value))
+            jobs.append(job_rec)
+    return jobs
+
+
 logging.getLogger('cwltool').setLevel(eval_log_level(conf_get_default('biowardrobe', 'LOG_LEVEL', 'INFO').upper()))
 
 max_jobs_to_run = get_max_jobs_to_run()
 monitor_folder = conf.get('biowardrobe', 'CWL_JOBS')
 
-folder_new = os.path.join(monitor_folder, "new")
-folder_running = os.path.join(monitor_folder, "running")
-folder_fail = os.path.join(monitor_folder, "fail")
-folder_success = os.path.join(monitor_folder, "success")
+jobs_list = get_jobs_folder_structure (monitor_folder)
 
-
-if not os.path.exists(folder_running):
-    os.mkdir(folder_running, 0777)
-if not os.path.exists(folder_fail):
-    os.mkdir(folder_fail, 0777)
-if not os.path.exists(folder_success):
-    os.mkdir(folder_success, 0777)
-
-
-tot_files_run = len(get_only_file(folder_running))
-tot_files_new = len(get_only_file(folder_new))
+tot_files_run = len(get_only_files(jobs_list, key="running"))
+tot_files_new = len(get_only_files(jobs_list, key="new"))
 
 # add new jobs into running
 if tot_files_run < max_jobs_to_run and tot_files_new > 0:
     for i in range(min(max_jobs_to_run - tot_files_run, tot_files_new)):
-        oldest = min(get_only_file(folder_new), key=os.path.getctime)
-        print "mv {0} {1}".format (oldest, folder_running)
-        shutil.move(oldest, folder_running)
+        oldest = min(get_only_files(jobs_list, key="new"), key=os.path.getctime)
+        print "mv {0} {1}".format (oldest, os.path.join('/'.join(oldest.split('/')[0:-2]), 'running'))
+        shutil.move(oldest, os.path.join('/'.join(oldest.split('/')[0:-2]), 'running'))
 
 
-for fn in get_only_file(folder_running):
+for fn in get_only_files(jobs_list, key="running"):
     try:
         make_dag(fn, find_workflow(fn))
     except ValueError:
-        shutil.move(fn, folder_fail)
+        shutil.move(fn, os.path.join('/'.join(fn.split('/')[0:-2]), 'fail'))
 
