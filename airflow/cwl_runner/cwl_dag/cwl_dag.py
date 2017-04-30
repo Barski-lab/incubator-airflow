@@ -136,9 +136,11 @@ def make_dag(job_file, workflow_file):
 def find_workflow(job_filename):
     workflows_folder = conf.get('biowardrobe', 'CWL_WORKFLOWS')
     job_keyname = "-".join(os.path.basename(job_filename).split("-")[0:-1])
-    workflow_filenames = glob.glob(os.path.join(workflows_folder,job_keyname+".cwl"))
+    workflow_filenames = []
+    for root, dirs, files in os.walk(workflows_folder):
+        workflow_filenames.extend([os.path.join(root, filename) for filename in files if filename == job_keyname+".cwl"])
     if len(workflow_filenames) > 0:
-        return workflow_filenames[0]
+        return min(workflow_filenames, key=os.path.getctime)
     else:
         raise ValueError
 
@@ -168,7 +170,7 @@ tot_files_new = len(get_only_file(folder_new))
 # add new jobs into running
 if tot_files_run < max_jobs_to_run and tot_files_new > 0:
     for i in range(min(max_jobs_to_run - tot_files_run, tot_files_new)):
-        oldest = max(get_only_file(folder_new), key=os.path.getctime)
+        oldest = min(get_only_file(folder_new), key=os.path.getctime)
         print "mv {0} {1}".format (oldest, folder_running)
         shutil.move(oldest, folder_running)
 
