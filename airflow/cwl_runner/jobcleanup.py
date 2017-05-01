@@ -76,6 +76,7 @@ class JobCleanup(BaseOperator):
                             os.remove(dst) if promises[out]["class"] == 'File' else shutil.rmtree (dst, True)
                         shutil.move(src, dst)
                         os.chmod(dst, 0775) if promises[out]["class"] == 'Directory' else os.chmod(dst, 0664)
+                        os.chown(dst, -1, os.getgid()) # change group id to current user main group
 
         for rmf in self.rm_files:
             if os.path.isfile(rmf):
