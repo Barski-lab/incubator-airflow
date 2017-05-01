@@ -17,6 +17,7 @@ import copy
 from airflow.cwl_runner.cwlutils import shortname, flatten
 import tempfile
 import cwltool.stdfsaccess
+import sys
 
 
 class CWLStepOperator(BaseOperator):
@@ -121,7 +122,8 @@ class CWLStepOperator(BaseOperator):
                                                           select_resources=None,
                                                           make_fs_access=cwltool.stdfsaccess.StdFsAccess,
                                                           **kwargs)
-
+        if not output and status == "permanentFail":
+            raise ValueError
         promises = {}
         for out in self.cwl_step.tool["outputs"]:
             out_id = shortname(out["id"])

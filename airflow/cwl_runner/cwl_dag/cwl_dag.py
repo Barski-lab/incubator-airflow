@@ -34,13 +34,8 @@ def eval_log_level(key):
     return log_depth[key] if key in log_depth else 20
 
 def fail_callback(context):
-    uid = context["dag"].dag_id.split("_")[0]
-    fail_file = glob.glob(os.path.join(folder_running, uid+"*"))
-    if len(fail_file) != 1:
-        raise Exception("Must be one failed file:{0}".format(fail_file))
-    shutil.move(fail_file[0], folder_fail)
-    print("Failed uid: {0} file: {1}".format(uid, fail_file[0]))
-
+    job_file = context["dag"].default_args["job_filename"]
+    shutil.move(job_file, os.path.join('/'.join(job_file.split('/')[0:-2]), 'fail'))
 
 def gen_uid (job_file):
     with open(job_file, 'r') as f:
@@ -116,6 +111,7 @@ def make_dag(job_file, workflow_file):
         'tool_help': False,
         # 'workflow': None,
         # 'job_order': None,
+        "job_filename": job_file,
         'pack': False,
         'on_error': 'continue',
         'relax_path_checks': False,
