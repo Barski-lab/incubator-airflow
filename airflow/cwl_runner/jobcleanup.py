@@ -6,7 +6,7 @@ from jsonmerge import merge
 import cwltool.errors
 import shutil
 import json
-import stat
+from airflow.cwl_runner.cwlutils import set_permissions
 
 class JobCleanup(BaseOperator):
 
@@ -75,7 +75,7 @@ class JobCleanup(BaseOperator):
                         if os.path.exists(dst):
                             os.remove(dst) if promises[out]["class"] == 'File' else shutil.rmtree (dst, True)
                         shutil.move(src, dst)
-                        os.chmod(dst, stat.S_IWGRP) # group has write permission
+                        set_permissions(dst, dir_perm=0775, file_perm=0664)
 
         for rmf in self.rm_files:
             if os.path.isfile(rmf):

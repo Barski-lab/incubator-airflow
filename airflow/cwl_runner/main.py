@@ -34,7 +34,6 @@ from airflow.cwl_runner.cwldag import CWLDAG
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
 from airflow.cwl_runner.jobcleanup import JobCleanup
 from airflow.cwl_runner.cwlutils import conf_get_default
-from airflow import models, settings
 restore_stdout()
 
 
@@ -83,15 +82,8 @@ def gen_uid (job_file):
 
 
 def gen_dag_id (workflow_file, job_file):
-    dag_id = ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(job_file)
-    duplicate_dag_id = [dag_run.dag_id for dag_run in settings.Session().query(models.DagRun).filter(models.DagRun.dag_id.like(dag_id+'%'))]
-    if dag_id not in duplicate_dag_id:
-        return dag_id
-    else:
-        sufix = 1
-        while dag_id+'_'+str(sufix) in duplicate_dag_id:
-            sufix = sufix+1
-        return dag_id+'_'+str(sufix)
+    return ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(
+        job_file) + "-" + datetime.fromtimestamp(os.path.getctime(job_file)).isoformat().replace(':', '-')
 
 
 def eval_log_level(key):
@@ -218,10 +210,12 @@ def make_dag(args):
     tmpdir_prefix = get_tmpdir_prefix (args, job_entry, job)
 
     if not os.path.exists(output_folder):
-        os.makedirs(output_folder, 0777)
+        os.makedirs(output_folder)
+        os.chmod(output_folder, 0775)
 
     if not os.path.exists(tmp_folder):
-        os.makedirs(tmp_folder, 0777)
+        os.makedirs(tmp_folder)
+        os.chmod(tmp_folder, 0755)
 
     owner = job_entry.get('author', 'biowardrobe')
 
