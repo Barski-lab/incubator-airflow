@@ -391,7 +391,7 @@ class DagFileProcessor(AbstractDagFileProcessor):
         # Arbitrarily wait 5s for the process to die
         self._process.join(5)
         if sigkill and self._process.is_alive():
-            logging.warning("Killing PID %s", self._process.pid)
+            logging.warn("Killing PID %s", self._process.pid)
             os.kill(self._process.pid, signal.SIGKILL)
 
     @property
@@ -563,7 +563,7 @@ class SchedulerJob(BaseJob):
         """
         if not any([ti.sla for ti in dag.tasks]):
             self.logger.info("Skipping SLA check for {} because "
-                             "no tasks in DAG have SLAs".format(dag))
+              "no tasks in DAG have SLAs".format(dag))
             return
 
         TI = models.TaskInstance
@@ -945,25 +945,25 @@ class SchedulerJob(BaseJob):
                                    )
 
             if len(dag_runs) == 0:
-                self.logger.warning("DagRun for %s %s does not exist",
-                                    task_instance.dag_id,
-                                    task_instance.execution_date)
+                self.logger.warn("DagRun for %s %s does not exist",
+                                 task_instance.dag_id,
+                                 task_instance.execution_date)
                 continue
 
             # There should only be one DAG run. Add some logging info if this
             # is not the case for later debugging.
             if len(dag_runs) > 1:
-                self.logger.warning("Multiple DagRuns found for {} {}: {}"
-                                    .format(task_instance.dag_id,
-                                            task_instance.execution_date,
-                                            dag_runs))
+                self.logger.warn("Multiple DagRuns found for {} {}: {}"
+                                 .format(task_instance.dag_id,
+                                         task_instance.execution_date,
+                                         dag_runs))
 
             if not any(dag_run.state == State.RUNNING for dag_run in dag_runs):
-                self.logger.warning("Setting {} to state={} as it does not have "
-                                    "a DagRun in the {} state"
-                                    .format(task_instance,
-                                            new_state,
-                                            State.RUNNING))
+                self.logger.warn("Setting {} to state={} as it does not have "
+                                 "a DagRun in the {} state"
+                                 .format(task_instance,
+                                         new_state,
+                                         State.RUNNING))
                 task_instance.state = new_state
                 session.merge(task_instance)
         session.commit()
@@ -1029,6 +1029,9 @@ class SchedulerJob(BaseJob):
                              "with {open_slots} open slots and {num_queued} "
                              "task instances in queue".format(**locals()))
 
+            if open_slots <= 0:
+                continue
+
             priority_sorted_task_instances = sorted(
                 task_instances, key=lambda ti: (-ti.priority_weight, ti.execution_date))
 
@@ -1037,8 +1040,7 @@ class SchedulerJob(BaseJob):
 
             for task_instance in priority_sorted_task_instances:
                 if open_slots <= 0:
-                    self.logger.info("Not scheduling since there are {} open slots in pool {}"
-                        .format(open_slots, pool))
+                    self.logger.info("No more slots free")
                     # Can't schedule any more since there are no more open slots.
                     break
 
@@ -1062,12 +1064,11 @@ class SchedulerJob(BaseJob):
                 dag_id = task_instance.dag_id
 
                 if dag_id not in dag_id_to_possibly_running_task_count:
-                    # TODO(saguziel): also check against QUEUED state, see AIRFLOW-1104
                     dag_id_to_possibly_running_task_count[dag_id] = \
                         DAG.get_num_task_instances(
                             dag_id,
                             simple_dag_bag.get_dag(dag_id).task_ids,
-                            states=[State.RUNNING],
+                            states=[State.RUNNING, State.QUEUED],
                             session=session)
 
                 current_task_concurrency = dag_id_to_possibly_running_task_count[dag_id]
@@ -1176,7 +1177,7 @@ class SchedulerJob(BaseJob):
             self._process_task_instances(dag, tis_out)
             self.manage_slas(dag)
 
-        models.DagStat.clean_dirty([d.dag_id for d in dags])
+        models.DagStat.update([d.dag_id for d in dags])
 
     def _process_executor_events(self):
         """
@@ -1358,7 +1359,8 @@ class SchedulerJob(BaseJob):
         active_runs = DagRun.find(
             state=State.RUNNING,
             external_trigger=False,
-            session=session
+            session=session,
+            no_backfills=True,
         )
         for dr in active_runs:
             self.logger.info("Resetting {} {}".format(dr.dag_id,
@@ -1536,7 +1538,7 @@ class SchedulerJob(BaseJob):
                              .format(dagbag.dags.keys(),
                                      file_path))
         else:
-            self.logger.warning("No viable dags retrieved from {}".format(file_path))
+            self.logger.warn("No viable dags retrieved from {}".format(file_path))
             self.update_import_errors(session, dagbag)
             return []
 
@@ -1855,6 +1857,13 @@ class BackfillJob(BaseJob):
                     self.logger.debug("Task instance to run {} state {}"
                                       .format(ti, ti.state))
 
+                    # guard against externally modified tasks instances or
+                    # in case max concurrency has been reached at task runtime
+                    if ti.state == State.NONE:
+                        self.logger.warning("FIXME: task instance {} state was set to "
+                                            "None externally. This should not happen")
+                        ti.set_state(State.SCHEDULED, session=session)
+
                     # The task was already marked successful or skipped by a
                     # different Job. Don't rerun it.
                     if ti.state == State.SUCCESS:
@@ -1968,7 +1977,7 @@ class BackfillJob(BaseJob):
                     active_dag_runs.remove(run)
 
                 if run.dag.is_paused:
-                    models.DagStat.clean_dirty([run.dag_id], session=session)
+                    models.DagStat.update([run.dag_id], session=session)
 
             msg = ' | '.join([
                 "[backfill progress]",

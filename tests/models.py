@@ -27,7 +27,7 @@ from airflow import models, settings, AirflowException
 from airflow.exceptions import AirflowSkipException
 from airflow.models import DAG, TaskInstance as TI
 from airflow.models import State as ST
-from airflow.models import DagModel
+from airflow.models import DagModel, DagStat
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.python_operator import PythonOperator
@@ -52,8 +52,8 @@ class DagTest(unittest.TestCase):
         """
         dag = models.DAG('test-dag')
 
-        self.assertEqual(dict, type(dag.params))
-        self.assertEqual(0, len(dag.params))
+        assert type(dag.params) == dict
+        assert len(dag.params) == 0
 
     def test_params_passed_and_params_in_default_args_no_override(self):
         """
@@ -71,7 +71,7 @@ class DagTest(unittest.TestCase):
 
         params_combined = params1.copy()
         params_combined.update(params2)
-        self.assertEqual(params_combined, dag.params)
+        assert dag.params == params_combined
 
     def test_dag_as_context_manager(self):
         """
@@ -233,6 +233,55 @@ class DagTest(unittest.TestCase):
             states=[None, State.QUEUED, State.RUNNING], session=session))
         session.close()
 
+
+class DagStatTest(unittest.TestCase):
+    def test_dagstats_crud(self):
+        DagStat.create(dag_id='test_dagstats_crud')
+
+        session = settings.Session()
+        qry = session.query(DagStat).filter(DagStat.dag_id == 'test_dagstats_crud')
+        self.assertEqual(len(qry.all()), len(State.dag_states))
+
+        DagStat.set_dirty(dag_id='test_dagstats_crud')
+        res = qry.all()
+
+        for stat in res:
+            self.assertTrue(stat.dirty)
+
+        # create missing
+        DagStat.set_dirty(dag_id='test_dagstats_crud_2')
+        qry2 = session.query(DagStat).filter(DagStat.dag_id == 'test_dagstats_crud_2')
+        self.assertEqual(len(qry2.all()), len(State.dag_states))
+
+        dag = DAG(
+            'test_dagstats_crud',
+            start_date=DEFAULT_DATE,
+            default_args={'owner': 'owner1'})
+
+        with dag:
+            op1 = DummyOperator(task_id='A')
+
+        now = datetime.datetime.now()
+        dr = dag.create_dagrun(
+            run_id='manual__' + now.isoformat(),
+            execution_date=now,
+            start_date=now,
+            state=State.FAILED,
+            external_trigger=False,
+        )
+
+        DagStat.update(dag_ids=['test_dagstats_crud'])
+        res = qry.all()
+        for stat in res:
+            if stat.state == State.FAILED:
+                self.assertEqual(stat.count, 1)
+            else:
+                self.assertEqual(stat.count, 0)
+
+        DagStat.update()
+        res = qry2.all()
+        for stat in res:
+            self.assertFalse(stat.dirty)
 
 class DagRunTest(unittest.TestCase):
 
@@ -444,10 +493,10 @@ class DagBagTest(unittest.TestCase):
         for dag_id in some_expected_dag_ids:
             dag = dagbag.get_dag(dag_id)
 
-            self.assertIsNotNone(dag)
-            self.assertEqual(dag_id, dag.dag_id)
+            assert dag is not None
+            assert dag.dag_id == dag_id
 
-        self.assertGreaterEqual(dagbag.size(), 7)
+        assert dagbag.size() >= 7
 
     def test_get_non_existing_dag(self):
         """
@@ -456,7 +505,7 @@ class DagBagTest(unittest.TestCase):
         dagbag = models.DagBag(include_examples=True)
 
         non_existing_dag_id = "non_existing_dag_id"
-        self.assertIsNone(dagbag.get_dag(non_existing_dag_id))
+        assert dagbag.get_dag(non_existing_dag_id) is None
 
     def test_process_file_that_contains_multi_bytes_char(self):
         """
@@ -468,7 +517,7 @@ class DagBagTest(unittest.TestCase):
         f.flush()
 
         dagbag = models.DagBag(include_examples=True)
-        self.assertEqual([], dagbag.process_file(f.name))
+        assert dagbag.process_file(f.name) == []
 
     def test_zip(self):
         """
@@ -476,7 +525,7 @@ class DagBagTest(unittest.TestCase):
         """
         dagbag = models.DagBag()
         dagbag.process_file(os.path.join(TEST_DAGS_FOLDER, "test_zip.zip"))
-        self.assertTrue(dagbag.get_dag("test_zip_dag"))
+        assert dagbag.get_dag("test_zip_dag")
 
     @patch.object(DagModel,'get_current')
     def test_get_dag_without_refresh(self, mock_dagmodel):
@@ -501,9 +550,9 @@ class DagBagTest(unittest.TestCase):
         processed_files = dagbag.process_file_calls
 
         # Should not call process_file agani, since it's already loaded during init.
-        self.assertEqual(1, dagbag.process_file_calls)
-        self.assertIsNotNone(dagbag.get_dag(dag_id))
-        self.assertEqual(1, dagbag.process_file_calls)
+        assert dagbag.process_file_calls == 1
+        assert dagbag.get_dag(dag_id) != None
+        assert dagbag.process_file_calls == 1
 
     def test_get_dag_fileloc(self):
         """
@@ -970,29 +1019,3 @@ class TaskInstanceTest(unittest.TestCase):
                                       key=key,
                                       include_prior_dates=True),
                          value)
-
-    def test_post_execute_hook(self):
-        """
-        Test that post_execute hook is called with the Operator's result.
-        The result ('error') will cause an error to be raised and trapped.
-        """
-
-        class TestError(Exception):
-            pass
-
-        class TestOperator(PythonOperator):
-            def post_execute(self, context, result):
-                if result == 'error':
-                    raise TestError('expected error.')
-
-        dag = models.DAG(dag_id='test_post_execute_dag')
-        task = TestOperator(
-            task_id='test_operator',
-            dag=dag,
-            python_callable=lambda: 'error',
-            owner='airflow',
-            start_date=datetime.datetime(2017, 2, 1))
-        ti = TI(task=task, execution_date=datetime.datetime.now())
-
-        with self.assertRaises(TestError):
-            ti.run()

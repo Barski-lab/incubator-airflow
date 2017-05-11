@@ -66,14 +66,14 @@
                 <!-- Column 2: Turn dag on/off -->
                 <td>
                   {% if dag_id in orm_dags %}
-                    <input id="toggle-{{ dag_id }}" dag_id="{{ dag_id }}" type="checkbox" {{ "checked" if not orm_dags[dag_id].is_paused else "" }} data-toggle="toggle" data-size="mini" method="post">
+                    <input id="toggle-{{ dag_id }}" dag_id="{{ dag_id }}" type="checkbox" {{ "checked" if not orm_dags[dag_id].is_paused else "" }} data-toggle="toggle" data-size="mini">
                   {% endif %}
                 </td>
 
                 <!-- Column 3: Name -->
                 <td>
                     {% if dag_id in webserver_dags %}
-                    <a href="{{ url_for('airflow.'+dag.default_view, dag_id=dag.dag_id) }}" title="{{ dag.description }}">
+                    <a href="{{ url_for('airflow.tree', dag_id=dag.dag_id) }}" title="{{ dag.description }}">
                         {{ dag_id }}
                     </a>
                     {% else %}
@@ -202,7 +202,7 @@
             is_paused = 'false'
           }
           url = 'airflow/paused?is_paused=' + is_paused + '&dag_id=' + dag_id;
-          $.post(url);
+          $.ajax(url);
         });
       });
       $('#dags').dataTable({
@@ -226,7 +226,7 @@
         });
       });
       $.getJSON("{{ url_for('api_experimental.latest_dag_runs') }}", function(data) {
-        $.each(data["items"], function() {
+        $.each(data, function() {
           var link = $("<a>", {
             href: this.dag_run_url,
             text: this.execution_date
