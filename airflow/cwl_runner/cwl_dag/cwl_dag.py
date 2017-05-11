@@ -12,6 +12,7 @@ import shutil
 import ruamel.yaml as yaml
 import logging
 import tempfile
+import re
 from airflow.cwl_runner.cwlutils import conf_get_default, get_only_files
 
 def get_max_jobs_to_run():
@@ -137,14 +138,21 @@ def make_dag(job_file, workflow_file):
 
 def find_workflow(job_filename):
     workflows_folder = conf.get('biowardrobe', 'CWL_WORKFLOWS')
-    job_keyname = "-".join(os.path.basename(job_filename).split("-")[0:-1])
-    workflow_filenames = []
+    all_workflows = {}
     for root, dirs, files in os.walk(workflows_folder):
-        workflow_filenames.extend([os.path.join(root, filename) for filename in files if filename == job_keyname+".cwl"])
-    if len(workflow_filenames) > 0:
-        return min(workflow_filenames, key=os.path.getctime)
-    else:
-        raise ValueError
+        all_workflows.update( \
+                              { filename: os.path.join(root, filename) \
+                                for filename in files \
+                                if  os.path.splitext(filename)[1]=='.cwl' \
+                                    and (filename not in all_workflows \
+                                                 or os.path.getctime(os.path.join(root, filename)) < \
+                                                 os.path.getctime( all_workflows[filename]) ) \
+                              } \
+                            )
+    for key in sorted(all_workflows, key=len, reverse=True):
+        if re.match(os.path.splitext(key)[0], os.path.basename(job_filename)):
+            return all_workflows[key]
+    raise ValueError
 
 
 def get_jobs_folder_structure(monitor_folder):
