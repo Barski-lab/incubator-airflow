@@ -124,10 +124,14 @@ class CWLDAG(DAG):
         for current_task in self.tasks:
             if isinstance(current_task, JobDispatcher) or isinstance(current_task, JobCleanup):
                 continue
-            current_task_input_sources = [shortname(source) for source in flatten([current_task_input["source"] for current_task_input in current_task.cwl_step.tool["inputs"] if not "default" in current_task_input])]
+            current_task_input_sources = [shortname(source) for source in flatten([current_task_input["source"] \
+                                                                                   for current_task_input in current_task.cwl_step.tool["inputs"] \
+                                                                                   if "source" in current_task_input])]
             workflow_input_id = [shortname(workflow_input["id"]) for workflow_input in self.cwlwf.tool["inputs"]]
-            # Should also check if current_task is on top, 'cos if task has all parameters to be set by default and don't need any of its inputs to be read from the file
-            # but it suppose to either return something directly to workflow output or through the other tasks which don't have connections with JobDispatcher too,
+            # Should also check if current_task is on top, 'cos if task has all parameters to be set by
+            # default and don't need any of its inputs to be read from the file
+            # but it suppose to either return something directly to workflow output
+            # or through the other tasks which don't have connections with JobDispatcher too,
             # it may happen that it will lost 'outdir', because the last one is set only by JoDispatcher task
             if any(i in current_task_input_sources for i in workflow_input_id) or not current_task.upstream_list:
                 current_task.set_upstream(task)
