@@ -83,10 +83,10 @@ class CWLStepOperator(BaseOperator):
                 if len(promises_outputs) > 1:
                     if inp.get("linkMerge", "merge_nested") == "merge_flattened":
                         promises_outputs = flatten (promises_outputs)
-                elif len(promises_outputs) > 0:
+                elif len(promises_outputs) == 1:
                     promises_outputs = promises_outputs[0]
                 else:
-                    continue
+                    promises_outputs = None
                 jobobj[jobobj_id] = promises_outputs
             elif "default" in inp:
                 d = copy.copy(inp["default"])
