@@ -183,7 +183,7 @@ tot_files_new = len(get_only_files(jobs_list, key="new"))
 # add new jobs into running
 if tot_files_run < max_jobs_to_run and tot_files_new > 0:
     for i in range(min(max_jobs_to_run - tot_files_run, tot_files_new)):
-        oldest = min(get_only_files(jobs_list, key="new"), key=os.path.getctime)
+        oldest = min(get_only_files(jobs_list, key="new", excl_key='running'), key=os.path.getctime)
         print "mv {0} {1}".format (oldest, os.path.join('/'.join(oldest.split('/')[0:-2]), 'running'))
         shutil.move(oldest, os.path.join('/'.join(oldest.split('/')[0:-2]), 'running'))
 
