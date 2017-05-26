@@ -29,6 +29,7 @@ def restore_stdout():
 
 suppress_stdout()
 from airflow.bin.cli import backfill
+from airflow import models, settings
 from airflow.configuration import conf
 from airflow.cwl_runner.cwldag import CWLDAG
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
@@ -82,8 +83,15 @@ def gen_uid (job_file):
 
 
 def gen_dag_id (workflow_file, job_file):
-    return ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(
-        job_file) + "-" + datetime.fromtimestamp(os.path.getctime(job_file)).isoformat().replace(':', '-')
+    dag_id = ".".join(workflow_file.split("/")[-1].split(".")[0:-1]) + "-" + gen_uid(job_file) + "-" + datetime.fromtimestamp(os.path.getctime(job_file)).isoformat().replace(':', '-')
+    duplicate_dag_id = [dag_run.dag_id for dag_run in settings.Session().query(models.DagRun).filter(models.DagRun.dag_id.like(dag_id+'%'))]
+    if dag_id not in duplicate_dag_id:
+        return dag_id
+    else:
+        sufix = 1
+        while dag_id+'_'+str(sufix) in duplicate_dag_id:
+            sufix = sufix+1
+        return dag_id+'_'+str(sufix)
 
 
 def eval_log_level(key):

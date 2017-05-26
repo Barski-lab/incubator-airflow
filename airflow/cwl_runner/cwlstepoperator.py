@@ -85,8 +85,10 @@ class CWLStepOperator(BaseOperator):
                         promises_outputs = flatten (promises_outputs)
                 elif len(promises_outputs) == 1:
                     promises_outputs = promises_outputs[0]
-                else:
+                elif "valueFrom" in inp:
                     promises_outputs = None
+                else:
+                    continue
                 jobobj[jobobj_id] = promises_outputs
             elif "default" in inp:
                 d = copy.copy(inp["default"])
