@@ -19,11 +19,21 @@ implement their own login mechanisms by providing an `airflow_login` module
 in their PYTHONPATH. airflow_login should be based off the
 `airflow.www.login`
 """
+
+import logging
+# This is specifically to suppress lib2to3 logging
+import lib2to3.pgen2.driver
+class Lib2to3LoggingModuleShim(object):
+    def getLogger(self):
+        return logging.getLogger('lib2to3')
+lib2to3.pgen2.driver.logging = Lib2to3LoggingModuleShim()
+logging.getLogger('lib2to3').setLevel(logging.ERROR)
+
+
 from builtins import object
 from airflow import version
 __version__ = version.version
 
-import logging
 import sys
 
 from airflow import configuration as conf

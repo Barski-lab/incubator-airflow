@@ -109,7 +109,7 @@ def eval_log_level(key):
 def set_logger ():
     cwl_logger = logging.getLogger("cwltool")
     cwl_logger.addHandler(logging.StreamHandler())
-    cwl_logger.setLevel(eval_log_level(conf_get_default('biowardrobe','LOG_LEVEL','ERROR').upper()))
+    cwl_logger.setLevel(eval_log_level(conf_get_default('biowardrobe','LOG_LEVEL','INFO').upper()))
 
 
 def get_log_filename (args):
