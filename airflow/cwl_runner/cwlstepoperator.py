@@ -76,9 +76,14 @@ class CWLStepOperator(BaseOperator):
 
         for inp in self.cwl_step.tool["inputs"]:
             jobobj_id = shortname(inp["id"]).split("/")[-1]
-            if "source" in inp:
-                source_ids = [shortname(source) for source in inp["source"]] if isinstance(inp["source"], list) else [shortname(inp["source"])]
-                promises_outputs = [promises[source_id] for source_id in source_ids if source_id in promises]
+            if "source" or "valueFrom" in inp:
+                source_ids = []
+                promises_outputs = []
+                try:
+                    source_ids = [shortname(source) for source in inp["source"]] if isinstance(inp["source"], list) else [shortname(inp["source"])]
+                    promises_outputs = [promises[source_id] for source_id in source_ids if source_id in promises]
+                except Exception as ex:
+                    logging.info("{0}: Couldn't find source field in step input:\n{1}".format(self.task_id,json.dumps(inp,indent=4)))
                 logging.info('{0}: For source_ids: \n{1} \nfound upstream outputs: \n{2}'.format(self.task_id, source_ids, promises_outputs))
                 if len(promises_outputs) > 1:
                     if inp.get("linkMerge", "merge_nested") == "merge_flattened":
