@@ -76,7 +76,7 @@ class CWLStepOperator(BaseOperator):
 
         for inp in self.cwl_step.tool["inputs"]:
             jobobj_id = shortname(inp["id"]).split("/")[-1]
-            if "source" or "valueFrom" in inp:
+            if "source" in inp or "valueFrom" in inp:
                 source_ids = []
                 promises_outputs = []
                 try:
