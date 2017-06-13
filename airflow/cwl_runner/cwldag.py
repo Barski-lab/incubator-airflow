@@ -7,6 +7,7 @@ import cwltool.main
 import cwltool.load_tool
 import cwltool.workflow
 import cwltool.errors
+from cwltool.resolver import tool_resolver
 from airflow.models import DAG
 from airflow.cwl_runner.cwlstepoperator import CWLStepOperator
 from airflow.cwl_runner.cwlutils import shortname, flatten
@@ -14,6 +15,7 @@ import os
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
 from airflow.cwl_runner.jobcleanup import JobCleanup
 import json
+from six.moves import urllib
 
 
 class CWLDAG(DAG):
@@ -27,29 +29,34 @@ class CWLDAG(DAG):
 
     def __init__(
             self,
-            cwl_workflow,
             dag_id=None,
             default_args=None,
             *args, **kwargs):
 
-        _dag_id = dag_id if dag_id else cwl_workflow.split("/")[-1].replace(".cwl", "").replace(".", "_dot_")
+        _dag_id = dag_id if dag_id else urllib.parse.urldefrag(default_args["cwl_workflow"])[0].split("/")[-1].replace(".cwl", "").replace(".", "_dot_")
         super(self.__class__, self).__init__(dag_id=_dag_id,
                                              default_args=default_args, *args, **kwargs)
 
-        self.cwlwf = cwltool.load_tool.load_tool(cwl_workflow, cwltool.workflow.defaultMakeTool, strict = default_args['strict'])
+        self.cwlwf = cwltool.load_tool.load_tool(argsworkflow = default_args["cwl_workflow"],
+                                                 makeTool = cwltool.workflow.defaultMakeTool,
+                                                 resolver = tool_resolver,
+                                                 strict = default_args['strict'])
 
         if type(self.cwlwf) == int or (self.cwlwf.tool["class"] != "Workflow" and self.cwlwf.tool["class"] != "CommandLineTool"):
             raise cwltool.errors.WorkflowException(
                 "Class '{0}' is not supported yet in CWLDAG".format(self.cwlwf.tool["class"]))
 
         if self.cwlwf.tool["class"] == "CommandLineTool":
-            dirname = os.path.dirname(cwl_workflow)
-            filename, ext = os.path.splitext(os.path.basename(cwl_workflow))
+            dirname = os.path.dirname(default_args["cwl_workflow"])
+            filename, ext = os.path.splitext(os.path.basename(default_args["cwl_workflow"]))
             new_workflow_name = os.path.join(dirname, filename + '_workflow' + ext)
-            generated_workflow = self.gen_workflow (self.cwlwf.tool, cwl_workflow)
+            generated_workflow = self.gen_workflow (self.cwlwf.tool, default_args["cwl_workflow"])
             with open(new_workflow_name, 'w') as generated_workflow_stream:
                 generated_workflow_stream.write(json.dumps(generated_workflow, indent=4))
-            self.cwlwf = cwltool.load_tool.load_tool(new_workflow_name, cwltool.workflow.defaultMakeTool, strict = default_args['strict'])
+            self.cwlwf = cwltool.load_tool.load_tool(argsworkflow = new_workflow_name,
+                                                     makeTool = cwltool.workflow.defaultMakeTool,
+                                                     resolver=tool_resolver,
+                                                     strict = default_args['strict'])
 
         self.requirements = self.cwlwf.tool.get("requirements", [])
 

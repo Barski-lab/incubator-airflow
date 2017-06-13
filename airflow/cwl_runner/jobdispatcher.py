@@ -12,6 +12,7 @@ from cwltool.stdfsaccess import StdFsAccess
 from typing import cast, Callable, Any, Text
 import json
 from airflow.cwl_runner.cwlutils import url_shortname
+from six.moves import urllib
 
 class JobDispatcher(BaseOperator):
 
@@ -97,7 +98,11 @@ class JobDispatcher(BaseOperator):
 
         logging.info('{0}: Job object after adjustment and normalization: \n{1}'.format(self.task_id, json.dumps(job_order_object, indent=4)))
 
-        cwl_context['promises'] = job_order_object
+        fragment = urllib.parse.urlsplit(self.dag.default_args["cwl_workflow"]).fragment
+        fragment = fragment + '/' if fragment else ''
+        job_order_object_extended = {fragment + key: value for key, value in job_order_object.iteritems()}
+
+        cwl_context['promises'] = job_order_object_extended
         cwl_context['outdir'] = self.mktmp()
         logging.info(
             '{0}: Output: \n {1}'.format(self.task_id, json.dumps(cwl_context, indent=4)))

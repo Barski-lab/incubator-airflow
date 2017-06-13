@@ -37,7 +37,7 @@ class CWLStepOperator(BaseOperator):
         self.outdir = None
 
         self.cwl_step = cwl_step
-        step_id = shortname(cwl_step.tool["id"])
+        step_id = shortname(cwl_step.tool["id"]).split("/")[-1]
 
         super(self.__class__, self).__init__(task_id=step_id, *args, **kwargs)
 
@@ -71,6 +71,9 @@ class CWLStepOperator(BaseOperator):
 
         logging.info(
             '{0}: Step inputs: \n {1}'.format(self.task_id, json.dumps(self.cwl_step.tool["inputs"],indent=4)))
+
+        logging.info(
+            '{0}: Step outputs: \n {1}'.format(self.task_id, json.dumps(self.cwl_step.tool["outputs"],indent=4)))
 
         jobobj = {}
 
@@ -131,6 +134,10 @@ class CWLStepOperator(BaseOperator):
                                                           **kwargs)
         if not output and status == "permanentFail":
             raise ValueError
+
+        logging.info(
+            '{0}: Embedded tool outputs: \n {1}'.format(self.task_id, json.dumps(output,indent=4)))
+
         promises = {}
         for out in self.cwl_step.tool["outputs"]:
             out_id = shortname(out["id"])
