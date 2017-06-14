@@ -42,11 +42,11 @@ class CWLDAG(DAG):
                                                  resolver = tool_resolver,
                                                  strict = default_args['strict'])
 
-        if type(self.cwlwf) == int or (self.cwlwf.tool["class"] != "Workflow" and self.cwlwf.tool["class"] != "CommandLineTool"):
+        if type(self.cwlwf) == int:
             raise cwltool.errors.WorkflowException(
                 "Class '{0}' is not supported yet in CWLDAG".format(self.cwlwf.tool["class"]))
 
-        if self.cwlwf.tool["class"] == "CommandLineTool":
+        if self.cwlwf.tool["class"] == "CommandLineTool" or self.cwlwf.tool["class"] == "ExpressionTool":
             dirname = os.path.dirname(default_args["cwl_workflow"])
             filename, ext = os.path.splitext(os.path.basename(default_args["cwl_workflow"]))
             new_workflow_name = os.path.join(dirname, filename + '_workflow' + ext)
