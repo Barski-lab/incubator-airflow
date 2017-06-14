@@ -64,7 +64,7 @@ class JobCleanup(BaseOperator):
 
         for out,val in self.outputs.iteritems():
             if out in promises:
-                collected_workflow_outputs = merge(collected_workflow_outputs, {val: promises[out]})
+                collected_workflow_outputs = merge(collected_workflow_outputs, {val.split("/")[-1]: promises[out]})
                 if isinstance(promises[out], dict) and "class" in promises[out] and promises[out]["class"] in ['File', 'Directory']:
                     item_list = []
                     visit(promises[out])
