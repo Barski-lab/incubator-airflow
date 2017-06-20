@@ -18,6 +18,11 @@ import json
 from six.moves import urllib
 
 
+def check_unsupported_feature (tool):
+    if tool["class"] == "Workflow" and [step["id"] for step in tool["steps"] if "scatter" in step]:
+        return True, "Scatter is not supported"
+    return False, None
+
 class CWLDAG(DAG):
 
     @property
@@ -42,9 +47,8 @@ class CWLDAG(DAG):
                                                  resolver = tool_resolver,
                                                  strict = default_args['strict'])
 
-        if type(self.cwlwf) == int:
-            raise cwltool.errors.WorkflowException(
-                "Class '{0}' is not supported yet in CWLDAG".format(self.cwlwf.tool["class"]))
+        if type(self.cwlwf) == int or check_unsupported_feature(self.cwlwf.tool)[0]:
+            raise cwltool.errors.UnsupportedRequirement(check_unsupported_feature(self.cwlwf.tool)[1])
 
         if self.cwlwf.tool["class"] == "CommandLineTool" or self.cwlwf.tool["class"] == "ExpressionTool":
             dirname = os.path.dirname(default_args["cwl_workflow"])

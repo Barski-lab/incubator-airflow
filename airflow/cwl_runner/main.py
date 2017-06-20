@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime
-
+import cwltool.errors
 
 def suppress_stdout():
     global null_fds
@@ -281,7 +281,11 @@ def make_dag(args):
 
 try:
     make_dag(read_backup())
-except:
+except cwltool.errors.UnsupportedRequirement as feature_ex:
+    print feature_ex
+    remove_backup()
+    sys.exit(33)
+except Exception as ex:
     pass
 
 if __name__ == "__main__":
