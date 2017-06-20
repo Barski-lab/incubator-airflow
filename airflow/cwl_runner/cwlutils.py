@@ -40,7 +40,7 @@ def get_only_files (jobs, key, excl_key = None):
                                     (excl_key and os.path.isfile(filename) and \
                                      os.path.basename(filename) not in [os.path.basename(excl_filename) for excl_filename in glob.iglob(item[excl_key]+"/*")])\
                                     ]\
-                            )                              
+                            )
     return key_filtered
 
 

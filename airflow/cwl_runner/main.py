@@ -281,7 +281,8 @@ def make_dag(args):
 
 try:
     make_dag(read_backup())
-except:
+except Exception as ex:
+    print "Exception: ", ex
     pass
 
 if __name__ == "__main__":
