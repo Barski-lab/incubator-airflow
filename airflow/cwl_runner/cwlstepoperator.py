@@ -109,7 +109,8 @@ class CWLStepOperator(BaseOperator):
         #         d = copy.copy(inp["default"])
         #         jobobj[jobobj_id] = d
 
-        jobobj = promises
+        all_step_sources = [shortname(source) for source in list(set(flatten([step_in["source"] for step_in in self.cwl_step.tool["in"] if "source" in step_in])))]
+        jobobj = {shortname(source_id).split("/")[-1]: promises[source_id] for source_id in all_step_sources if source_id in promises}
 
         logging.info('{0}: Collected job object: \n {1}'.format(self.task_id, json.dumps(jobobj,indent=4)))
 
@@ -139,29 +140,19 @@ class CWLStepOperator(BaseOperator):
                     print "Source is not found"
 
 
-        def remove_not_provided_inputs_from_step (step, jobobj):
-            for step_input in step["in"]:   # Check do we have valueFrom and default in in or in inputs
-                if "valueFrom" in step_input or "default" in step_input or (
-                        "source" in step_input and isinstance(step_input["source"], list)) or (
-                        "source" in step_input and shortname(step_input["source"]) in jobobj):
-                    continue
-                else:
-                    step["in"].remove(step_input)
-
-
-        def get_inputs (step):
+        def get_inputs (step, current_jobobj):
             inputs = [
                         {
-                            "id": shortname(source),
-                            "type": [
-                                        "null",
-                                        "Any",
+                            "id": shortname(source).split("/")[-1],
+                            "type": flatten([
+                                        "Any",     # Maybe we don't need Any. If yes we can delete flatten function too
                                         get_type_dy_id(step.embedded_tool.tool, get_id_by_source(step.tool["in"], source))
-                                    ]
+                                    ])
                         }
                         for source in [shortname(source) for source in
                                             list(set(flatten([step_in["source"] for step_in in step.tool["in"] if "source" in step_in])))
                                       ]
+                        if source.split("/")[-1] in current_jobobj
                     ]
             return inputs
 
@@ -191,9 +182,9 @@ class CWLStepOperator(BaseOperator):
 
             for step_input in target_step["in"]:
                 custom_input = {"id": shortname(step_input["id"]).split("/")[-1]}
-                if step_input.get("source", None): custom_input["source"] = [shortname(input_source) for input_source in
+                if step_input.get("source", None): custom_input["source"] = [shortname(input_source).split("/")[-1] for input_source in
                                                                              step_input["source"]] if isinstance(
-                    step_input["source"], list) else shortname(step_input["source"])
+                    step_input["source"], list) else shortname(step_input["source"]).split("/")[-1]
                 if step_input.get("linkMerge", None): custom_input["linkMerge"] = step_input["linkMerge"]
                 if step_input.get("default", None): custom_input["default"] = step_input["default"]
                 if step_input.get("valueFrom", None): custom_input["valueFrom"] = step_input["valueFrom"]
@@ -206,14 +197,10 @@ class CWLStepOperator(BaseOperator):
             new_workflow = {
                 "cwlVersion": workflow.tool.get("cwlVersion", "v1.0"),
                 "class": "Workflow",
-                "inputs": get_inputs(step),
+                "inputs": get_inputs(step, jobobj),
                 "outputs": get_outputs(step),
-                "steps": []
+                "steps": [get_custom_step(workflow, step)]
             }
-
-            custom_step = get_custom_step(workflow, step)
-            remove_not_provided_inputs_from_step(custom_step, jobobj) # because of Null bug
-            new_workflow["steps"].append(custom_step)
 
             if workflow.tool.get("$namespaces", None): new_workflow["$namespaces"] = workflow.tool["$namespaces"]
             if workflow.tool.get("$schemas", None): new_workflow["$schemas"] = workflow.tool["$schemas"]

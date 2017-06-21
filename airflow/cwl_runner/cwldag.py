@@ -70,6 +70,7 @@ class CWLDAG(DAG):
             if input.get("format", None): custom_input["format"] = input["format"]
             if input.get("doc", None): custom_input["doc"] = input["doc"]
             if input.get("label", None): custom_input["label"] = input["label"]
+            if input.get("default", None): custom_input["default"] = input["default"]
             inputs.append(custom_input)
         return inputs
 
