@@ -118,12 +118,12 @@ def make_dag(job_file, workflow_file):
         'relax_path_checks': False,
         'validate': False,
         'compute_checksum': True,
-        "no_match_user" : False
+        "no_match_user" : False,
+        "cwl_workflow" : workflow_file
     }
 
     dag = CWLDAG(
         dag_id=dag_id,
-        cwl_workflow = workflow_file,
         schedule_interval = '@once',
         default_args=default_args)
     dag.create()
