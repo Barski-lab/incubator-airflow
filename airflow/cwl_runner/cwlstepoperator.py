@@ -125,7 +125,10 @@ class CWLStepOperator(BaseOperator):
         # maybe need to add here scatter functionality too
 
         kwargs = self.dag.default_args
-        kwargs['outdir'] = tempfile.mkdtemp(prefix=os.path.join(self.outdir, "task_tmp"))
+        kwargs['outdir'] = tempfile.mkdtemp(prefix=os.path.join(self.outdir, "step_tmp"))
+        kwargs['tmpdir_prefix']=kwargs['tmpdir_prefix'] if kwargs.get('tmpdir_prefix') else os.path.join(kwargs['outdir'], 'cwl_tmp_')
+        kwargs['tmp_outdir_prefix']=kwargs['tmp_outdir_prefix'] if kwargs.get('tmp_outdir_prefix') else os.path.join(kwargs['outdir'], 'cwl_outdir_')
+
         output, status = cwltool.main.single_job_executor(self.cwl_step.embedded_tool,
                                                           job,
                                                           makeTool=cwltool.workflow.defaultMakeTool,

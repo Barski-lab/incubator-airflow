@@ -45,7 +45,7 @@ class JobDispatcher(BaseOperator):
 
     def mktmp(self):
         tmp_folder = self.dag.default_args['tmp_folder']
-        outdir = tempfile.mkdtemp(prefix=os.path.abspath(os.path.join(tmp_folder,'scidap_tmp_')))
+        outdir = tempfile.mkdtemp(prefix=os.path.abspath(os.path.join(tmp_folder,'dag_tmp_')))
         return outdir
 
 

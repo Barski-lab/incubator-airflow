@@ -189,20 +189,6 @@ def get_output_folder (args, job_entry, job, workflow_file):
         return os.path.abspath(args.get('outdir'))
 
 
-def get_tmp_outdir_prefix (args, job_entry, job):
-    if not args.get('tmp_outdir_prefix'):
-        return os.path.join(get_tmp_folder(args, job_entry, job), 'cwl_outdir_')
-    else:
-        return os.path.abspath(args.get('tmp_outdir_prefix'))
-
-
-def get_tmpdir_prefix (args, job_entry, job):
-    if not args.get('tmpdir_prefix'):
-        return os.path.join(get_tmp_folder(args, job_entry, job), 'cwl_tmp_')
-    else:
-        return os.path.abspath(args.get('tmpdir_prefix'))
-
-
 def make_dag(args):
     set_logger()
     job = os.path.abspath(args['job'])
@@ -214,8 +200,6 @@ def make_dag(args):
     basedir = os.path.dirname(job)
     output_folder = get_output_folder(args, job_entry, job, workflow)
     tmp_folder = get_tmp_folder (args, job_entry, job)
-    tmp_outdir_prefix = get_tmp_outdir_prefix (args, job_entry, job)
-    tmpdir_prefix = get_tmpdir_prefix (args, job_entry, job)
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -241,12 +225,12 @@ def make_dag(args):
         'print_rdf': False,
         'print_dot': False,
         'relative_deps': False,
-        'tmp_outdir_prefix': tmp_outdir_prefix,
+        'tmp_outdir_prefix': os.path.abspath(args.get('tmp_outdir_prefix')),
         'use_container': True,
         'preserve_environment': ["PATH"],
         'preserve_entire_environment': False,
         "rm_container": True,
-        'tmpdir_prefix': tmpdir_prefix,
+        'tmpdir_prefix': os.path.abspath(args.get('tmpdir_prefix')),
         'print_input_deps': False,
         'cachedir': None,
         'rm_tmpdir': True,
