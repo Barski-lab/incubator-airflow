@@ -15,6 +15,7 @@ import tempfile
 import re
 from airflow.cwl_runner.cwlutils import conf_get_default, get_only_files
 
+
 def get_max_jobs_to_run():
     try:
         max_jobs_to_run = int(conf_get_default('biowardrobe', 'MAX_JOBS_TO_RUN', 1))
@@ -169,6 +170,7 @@ def get_jobs_folder_structure(monitor_folder):
 
 
 logging.getLogger('cwltool').setLevel(eval_log_level(conf_get_default('biowardrobe', 'LOG_LEVEL', 'INFO').upper()))
+logging.getLogger('salad').setLevel(eval_log_level(conf_get_default('biowardrobe', 'LOG_LEVEL', 'INFO').upper()))
 
 max_jobs_to_run = get_max_jobs_to_run()
 monitor_folder = conf.get('biowardrobe', 'CWL_JOBS')
