@@ -233,6 +233,61 @@ class DagTest(unittest.TestCase):
             states=[None, State.QUEUED, State.RUNNING], session=session))
         session.close()
 
+    def test_render_template_field(self):
+        """Tests if render_template from a field works"""
+
+        dag = DAG('test-dag',
+                  start_date=DEFAULT_DATE)
+
+        with dag:
+            task = DummyOperator(task_id='op1')
+
+        result = task.render_template('', '{{ foo }}', dict(foo='bar'))
+        self.assertEqual(result, 'bar')
+
+    def test_render_template_field_macro(self):
+        """ Tests if render_template from a field works,
+            if a custom filter was defined"""
+
+        dag = DAG('test-dag',
+                  start_date=DEFAULT_DATE,
+                  user_defined_macros = dict(foo='bar'))
+
+        with dag:
+            task = DummyOperator(task_id='op1')
+
+        result = task.render_template('', '{{ foo }}', dict())
+        self.assertEqual(result, 'bar')
+
+    def test_user_defined_filters(self):
+        def jinja_udf(name):
+            return 'Hello %s' %name
+
+        dag = models.DAG('test-dag',
+                         start_date=DEFAULT_DATE,
+                         user_defined_filters=dict(hello=jinja_udf))
+        jinja_env = dag.get_template_env()
+
+        self.assertIn('hello', jinja_env.filters)
+        self.assertEqual(jinja_env.filters['hello'], jinja_udf)
+
+    def test_render_template_field_filter(self):
+        """ Tests if render_template from a field works,
+            if a custom filter was defined"""
+
+        def jinja_udf(name):
+            return 'Hello %s' %name
+
+        dag = DAG('test-dag',
+                  start_date=DEFAULT_DATE,
+                  user_defined_filters = dict(hello=jinja_udf))
+
+        with dag:
+            task = DummyOperator(task_id='op1')
+
+        result = task.render_template('', "{{ 'world' | hello}}", dict())
+        self.assertEqual(result, 'Hello world')
+
 
 class DagStatTest(unittest.TestCase):
     def test_dagstats_crud(self):
@@ -575,6 +630,45 @@ class DagBagTest(unittest.TestCase):
 
 class TaskInstanceTest(unittest.TestCase):
 
+    def test_set_task_dates(self):
+        """
+        Test that tasks properly take start/end dates from DAGs
+        """
+        dag = DAG('dag', start_date=DEFAULT_DATE, end_date=DEFAULT_DATE + datetime.timedelta(days=10))
+
+        op1 = DummyOperator(task_id='op_1', owner='test')
+
+        self.assertTrue(op1.start_date is None and op1.end_date is None)
+
+        # dag should assign its dates to op1 because op1 has no dates
+        dag.add_task(op1)
+        self.assertTrue(
+            op1.start_date == dag.start_date and op1.end_date == dag.end_date)
+
+        op2 = DummyOperator(
+            task_id='op_2',
+            owner='test',
+            start_date=DEFAULT_DATE - datetime.timedelta(days=1),
+            end_date=DEFAULT_DATE + datetime.timedelta(days=11))
+
+        # dag should assign its dates to op2 because they are more restrictive
+        dag.add_task(op2)
+        self.assertTrue(
+            op2.start_date == dag.start_date and op2.end_date == dag.end_date)
+
+        op3 = DummyOperator(
+            task_id='op_3',
+            owner='test',
+            start_date=DEFAULT_DATE + datetime.timedelta(days=1),
+            end_date=DEFAULT_DATE + datetime.timedelta(days=9))
+        # op3 should keep its dates because they are more restrictive
+        dag.add_task(op3)
+        self.assertTrue(
+            op3.start_date == DEFAULT_DATE + datetime.timedelta(days=1))
+        self.assertTrue(
+            op3.end_date == DEFAULT_DATE + datetime.timedelta(days=9))
+
+
     def test_set_dag(self):
         """
         Test assigning Operators to Dags, including deferred assignment
@@ -838,18 +932,25 @@ class TaskInstanceTest(unittest.TestCase):
             owner='airflow',
             start_date=datetime.datetime(2016, 2, 1, 0, 0, 0))
         ti = TI(
-            task=task, execution_date=datetime.datetime.now())
+            task=task, execution_date=DEFAULT_DATE)
         ti.end_date = datetime.datetime.now()
 
         ti.try_number = 1
         dt = ti.next_retry_datetime()
-        self.assertEqual(dt, ti.end_date + delay)
+        # between 30 * 2^0.5 and 30 * 2^1 (15 and 30)
+        self.assertEqual(dt, ti.end_date + datetime.timedelta(seconds=20.0))
+
+        ti.try_number = 4
+        dt = ti.next_retry_datetime()
+        # between 30 * 2^2 and 30 * 2^3 (120 and 240)
+        self.assertEqual(dt, ti.end_date + datetime.timedelta(seconds=181.0))
 
         ti.try_number = 6
         dt = ti.next_retry_datetime()
-        self.assertEqual(dt, ti.end_date + (2 ** 5) * delay)
+        # between 30 * 2^4 and 30 * 2^5 (480 and 960)
+        self.assertEqual(dt, ti.end_date + datetime.timedelta(seconds=825.0))
 
-        ti.try_number = 8
+        ti.try_number = 9
         dt = ti.next_retry_datetime()
         self.assertEqual(dt, ti.end_date+max_delay)
 

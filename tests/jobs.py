@@ -445,6 +445,91 @@ class BackfillJobTest(unittest.TestCase):
         subdag.clear()
         dag.clear()
 
+    def test_update_counters(self):
+        dag = DAG(
+            dag_id='test_manage_executor_state',
+            start_date=DEFAULT_DATE)
+
+        task1 = DummyOperator(
+            task_id='dummy',
+            dag=dag,
+            owner='airflow')
+
+        job = BackfillJob(dag=dag)
+
+        session = settings.Session()
+        dr = dag.create_dagrun(run_id=DagRun.ID_PREFIX,
+                               state=State.RUNNING,
+                               execution_date=DEFAULT_DATE,
+                               start_date=DEFAULT_DATE,
+                               session=session)
+        ti = TI(task1, dr.execution_date)
+        ti.refresh_from_db()
+
+        started = {}
+        tasks_to_run = {}
+        failed = set()
+        succeeded = set()
+        started = {}
+        skipped = set()
+
+        # test for success
+        ti.set_state(State.SUCCESS, session)
+        started[ti.key] = ti
+        job._update_counters(started=started, succeeded=succeeded,
+                                     skipped=skipped, failed=failed,
+                                     tasks_to_run=tasks_to_run)
+        self.assertTrue(len(started) == 0)
+        self.assertTrue(len(succeeded) == 1)
+        self.assertTrue(len(skipped) == 0)
+        self.assertTrue(len(failed) == 0)
+        self.assertTrue(len(tasks_to_run) == 0)
+
+        succeeded.clear()
+
+        # test for skipped
+        ti.set_state(State.SKIPPED, session)
+        started[ti.key] = ti
+        job._update_counters(started=started, succeeded=succeeded,
+                                     skipped=skipped, failed=failed,
+                                     tasks_to_run=tasks_to_run)
+        self.assertTrue(len(started) == 0)
+        self.assertTrue(len(succeeded) == 0)
+        self.assertTrue(len(skipped) == 1)
+        self.assertTrue(len(failed) == 0)
+        self.assertTrue(len(tasks_to_run) == 0)
+
+        skipped.clear()
+
+        # test for failed
+        ti.set_state(State.FAILED, session)
+        started[ti.key] = ti
+        job._update_counters(started=started, succeeded=succeeded,
+                                     skipped=skipped, failed=failed,
+                                     tasks_to_run=tasks_to_run)
+        self.assertTrue(len(started) == 0)
+        self.assertTrue(len(succeeded) == 0)
+        self.assertTrue(len(skipped) == 0)
+        self.assertTrue(len(failed) == 1)
+        self.assertTrue(len(tasks_to_run) == 0)
+
+        failed.clear()
+
+        # test for reschedule
+        # test for failed
+        ti.set_state(State.NONE, session)
+        started[ti.key] = ti
+        job._update_counters(started=started, succeeded=succeeded,
+                                     skipped=skipped, failed=failed,
+                                     tasks_to_run=tasks_to_run)
+        self.assertTrue(len(started) == 0)
+        self.assertTrue(len(succeeded) == 0)
+        self.assertTrue(len(skipped) == 0)
+        self.assertTrue(len(failed) == 0)
+        self.assertTrue(len(tasks_to_run) == 1)
+
+        session.close()
+
 
 class LocalTaskJobTest(unittest.TestCase):
     def setUp(self):
@@ -573,14 +658,14 @@ class SchedulerJobTest(unittest.TestCase):
         ti1.refresh_from_db()
         ti2.refresh_from_db()
         ti1.state = State.RUNNING
-        ti2.state = State.QUEUED
+        ti2.state = State.RUNNING
         session.merge(ti1)
         session.merge(ti2)
         session.commit()
 
         self.assertEqual(State.RUNNING, dr1.state)
         self.assertEqual(2, DAG.get_num_task_instances(dag_id, dag.task_ids,
-            states=[State.RUNNING, State.QUEUED], session=session))
+            states=[State.RUNNING], session=session))
 
         # create second dag run
         dr2 = scheduler.create_dag_run(dag)
@@ -607,10 +692,81 @@ class SchedulerJobTest(unittest.TestCase):
         self.assertEqual(3, DAG.get_num_task_instances(dag_id, dag.task_ids,
             states=[State.RUNNING, State.QUEUED], session=session))
         self.assertEqual(State.RUNNING, ti1.state)
-        self.assertEqual(State.QUEUED, ti2.state)
+        self.assertEqual(State.RUNNING, ti2.state)
         six.assertCountEqual(self, [State.QUEUED, State.SCHEDULED], [ti3.state, ti4.state])
 
         session.close()
+
+    def test_change_state_for_tis_without_dagrun(self):
+        dag = DAG(
+            dag_id='test_change_state_for_tis_without_dagrun',
+            start_date=DEFAULT_DATE)
+
+        DummyOperator(
+            task_id='dummy',
+            dag=dag,
+            owner='airflow')
+
+        dag2 = DAG(
+            dag_id='test_change_state_for_tis_without_dagrun_dont_change',
+            start_date=DEFAULT_DATE)
+
+        DummyOperator(
+            task_id='dummy',
+            dag=dag2,
+            owner='airflow')
+
+        session = settings.Session()
+        dr = dag.create_dagrun(run_id=DagRun.ID_PREFIX,
+                               state=State.RUNNING,
+                               execution_date=DEFAULT_DATE,
+                               start_date=DEFAULT_DATE,
+                               session=session)
+
+        dr2 = dag2.create_dagrun(run_id=DagRun.ID_PREFIX,
+                                 state=State.RUNNING,
+                                 execution_date=DEFAULT_DATE,
+                                 start_date=DEFAULT_DATE,
+                                 session=session)
+
+        ti = dr.get_task_instance(task_id='dummy', session=session)
+        ti.state = State.SCHEDULED
+        session.commit()
+
+        ti2 = dr2.get_task_instance(task_id='dummy', session=session)
+        ti2.state = State.SCHEDULED
+        session.commit()
+
+        dagbag = SimpleDagBag([dag])
+        scheduler = SchedulerJob(num_runs=0, run_duration=0)
+        scheduler._change_state_for_tis_without_dagrun(simple_dag_bag=dagbag,
+                                                       old_states=[State.SCHEDULED, State.QUEUED],
+                                                       new_state=State.NONE,
+                                                       session=session)
+
+        ti.refresh_from_db(session=session)
+        self.assertEqual(ti.state, State.SCHEDULED)
+
+        ti2.refresh_from_db(session=session)
+        self.assertEqual(ti2.state, State.SCHEDULED)
+
+        dr.refresh_from_db(session=session)
+        dr.state = State.FAILED
+
+        # why o why
+        session.merge(dr)
+        session.commit()
+
+        scheduler._change_state_for_tis_without_dagrun(simple_dag_bag=dagbag,
+                                                       old_states=[State.SCHEDULED, State.QUEUED],
+                                                       new_state=State.NONE,
+                                                       session=session)
+        ti.refresh_from_db(session=session)
+        self.assertEqual(ti.state, State.NONE)
+
+        # don't touch ti2
+        ti2.refresh_from_db(session=session)
+        self.assertEqual(ti2.state, State.SCHEDULED)
 
     def test_execute_helper_reset_orphaned_tasks(self):
         session = settings.Session()

@@ -31,6 +31,7 @@ class TestSparkSubmitHook(unittest.TestCase):
         'files': 'hive-site.xml',
         'py_files': 'sample_library.py',
         'jars': 'parquet.jar',
+        'total_executor_cores': 4,
         'executor_cores': 4,
         'executor_memory': '22g',
         'keytab': 'privileged_user.keytab',
@@ -39,7 +40,12 @@ class TestSparkSubmitHook(unittest.TestCase):
         'num_executors': 10,
         'verbose': True,
         'driver_memory': '3g',
-        'java_class': 'com.foo.bar.AppMain'
+        'java_class': 'com.foo.bar.AppMain',
+        'application_args': [
+            '-f foo',
+            '--bar bar',
+            'baz'
+        ]
     }
 
     def setUp(self):
@@ -81,6 +87,7 @@ class TestSparkSubmitHook(unittest.TestCase):
         assert "--files {}".format(self._config['files']) in cmd
         assert "--py-files {}".format(self._config['py_files']) in cmd
         assert "--jars {}".format(self._config['jars']) in cmd
+        assert "--total-executor-cores {}".format(self._config['total_executor_cores']) in cmd
         assert "--executor-cores {}".format(self._config['executor_cores']) in cmd
         assert "--executor-memory {}".format(self._config['executor_memory']) in cmd
         assert "--keytab {}".format(self._config['keytab']) in cmd
@@ -93,6 +100,15 @@ class TestSparkSubmitHook(unittest.TestCase):
         # Check if all config settings are there
         for k in self._config['conf']:
             assert "--conf {0}={1}".format(k, self._config['conf'][k]) in cmd
+
+        # Check the application arguments are there
+        for a in self._config['application_args']:
+            assert a in cmd
+
+        # Check if application arguments are after the application
+        application_idx = cmd.find(self._spark_job_file)
+        for a in self._config['application_args']:
+            assert cmd.find(a) > application_idx
 
         if self._config['verbose']:
             assert "--verbose" in cmd

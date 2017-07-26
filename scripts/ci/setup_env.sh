@@ -77,11 +77,16 @@ mkdir -p ${TRAVIS_CACHE}/minicluster
 mkdir -p ${TRAVIS_CACHE}/hive
 mkdir -p ${HIVE_HOME}
 chmod -R 777 ${HIVE_HOME}
-mkdir -p /user/hive/warehouse
+sudo mkdir -p /user/hive/warehouse
+sudo chown -R ${USER} /user/
+sudo chmod -R 777 /user/
+ls -l /
 
 if [ $HADOOP_DISTRO = "cdh" ]; then
-    URL="http://archive.cloudera.com/cdh5/cdh/5/hadoop-latest.tar.gz"
-    HIVE_URL="http://archive.cloudera.com/cdh5/cdh/5/hive-latest.tar.gz"
+    # URL="http://archive.cloudera.com/cdh5/cdh/5/hadoop-latest.tar.gz"
+    URL="https://archive.cloudera.com/cdh5/cdh/5/hadoop-2.6.0-cdh5.11.0.tar.gz"
+    # HIVE_URL="http://archive.cloudera.com/cdh5/cdh/5/hive-latest.tar.gz"
+    HIVE_URL="https://archive.cloudera.com/cdh5/cdh/5/hive-1.1.0-cdh5.11.0.tar.gz"
 elif [ $HADOOP_DISTRO = "hdp" ]; then
     URL="http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.3.2.0/tars/hadoop-2.7.1.2.3.2.0-2950.tar.gz"
     HIVE_URL="http://public-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.3.2.0/tars/apache-hive-1.2.1.2.3.2.0-2950-bin.tar.gz"

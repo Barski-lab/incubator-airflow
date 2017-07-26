@@ -208,6 +208,7 @@
       $('#dags').dataTable({
         "iDisplayLength": 500,
         "bSort": false,
+        "pageLength": 25,
       });
       $("#main_content").show(250);
       diameter = 25;
@@ -226,7 +227,7 @@
         });
       });
       $.getJSON("{{ url_for('api_experimental.latest_dag_runs') }}", function(data) {
-        $.each(data, function() {
+        $.each(data["items"], function() {
           var link = $("<a>", {
             href: this.dag_run_url,
             text: this.execution_date

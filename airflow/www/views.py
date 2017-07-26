@@ -284,6 +284,16 @@ def should_hide_value_for_key(key_name):
            and conf.getboolean('admin', 'hide_sensitive_variable_fields')
 
 
+
+def get_chart_height(dag):
+    """
+    TODO(aoen): See [AIRFLOW-1263] We use the number of tasks in the DAG as a heuristic to
+    approximate the size of generated chart (otherwise the charts are tiny and unreadable
+    when DAGs have a large number of tasks). Ideally nvd3 should allow for dynamic-height
+    charts, that is charts that take up space based on the size of the components within.
+    """
+    return 600 + len(dag.tasks) * 10
+
 class Airflow(BaseView):
 
     def is_visible(self):
@@ -1410,10 +1420,12 @@ class Airflow(BaseView):
                 include_upstream=True,
                 include_downstream=False)
 
+
+        chart_height = get_chart_height(dag)
         chart = nvd3.lineChart(
-            name="lineChart", x_is_date=True, height=600, width="1200")
+            name="lineChart", x_is_date=True, height=chart_height, width="1200")
         cum_chart = nvd3.lineChart(
-            name="cumLineChart", x_is_date=True, height=600, width="1200")
+            name="cumLineChart", x_is_date=True, height=chart_height, width="1200")
 
         y = defaultdict(list)
         x = defaultdict(list)
@@ -1515,8 +1527,10 @@ class Airflow(BaseView):
                 include_upstream=True,
                 include_downstream=False)
 
+        chart_height = get_chart_height(dag)
         chart = nvd3.lineChart(
-            name="lineChart", x_is_date=True, y_axis_format='d', height=600, width="1200")
+            name="lineChart", x_is_date=True, y_axis_format='d', height=chart_height,
+            width="1200")
 
         for task in dag.tasks:
             y = []
@@ -1577,8 +1591,9 @@ class Airflow(BaseView):
                 include_upstream=True,
                 include_downstream=False)
 
+        chart_height = get_chart_height(dag)
         chart = nvd3.lineChart(
-            name="lineChart", x_is_date=True, height=600, width="1200")
+            name="lineChart", x_is_date=True, height=chart_height, width="1200")
         y = {}
         x = {}
         for task in dag.tasks:
@@ -1621,7 +1636,7 @@ class Airflow(BaseView):
             'airflow/chart.html',
             dag=dag,
             chart=chart.htmlcontent,
-            height="700px",
+            height=str(chart_height + 100) + "px",
             demo_mode=conf.getboolean('webserver', 'demo_mode'),
             root=root,
             form=form,
@@ -1985,6 +2000,13 @@ class PoolModelView(wwwutils.SuperUserMixin, AirflowModelView):
     column_formatters = dict(
         pool=pool_link, used_slots=fused_slots, queued_slots=fqueued_slots)
     named_filter_urls = True
+    form_args = {
+        'pool': {
+            'validators': [
+                validators.DataRequired(),
+            ]
+        }
+    }
 
 
 class SlaMissModelView(wwwutils.SuperUserMixin, ModelViewOnly):
@@ -2129,6 +2151,13 @@ class KnowEventView(wwwutils.DataProfilingMixin, AirflowModelView):
     column_list = (
         'label', 'event_type', 'start_date', 'end_date', 'reported_by')
     column_default_sort = ("start_date", True)
+    column_sortable_list = (
+        'label',
+        ('event_type', 'event_type.know_event_type'),
+        'start_date',
+        'end_date',
+        ('reported_by', 'reported_by.username'),
+    )
 
 
 class KnowEventTypeView(wwwutils.DataProfilingMixin, AirflowModelView):
@@ -2165,11 +2194,19 @@ class VariableView(wwwutils.DataProfilingMixin, AirflowModelView):
     column_list = ('key', 'val', 'is_encrypted',)
     column_filters = ('key', 'val')
     column_searchable_list = ('key', 'val')
+    column_default_sort = ('key', False)
     form_widget_args = {
         'is_encrypted': {'disabled': True},
         'val': {
             'rows': 20,
         }
+    }
+    form_args = {
+        'key': {
+            'validators': {
+                validators.DataRequired(),
+            },
+        },
     }
     column_sortable_list = (
         'key',
@@ -2177,7 +2214,7 @@ class VariableView(wwwutils.DataProfilingMixin, AirflowModelView):
         'is_encrypted',
     )
     column_formatters = {
-        'val': hidden_field_formatter
+        'val': hidden_field_formatter,
     }
 
     # Default flask-admin export functionality doesn't handle serialized json
@@ -2231,6 +2268,7 @@ class XComView(wwwutils.SuperUserMixin, AirflowModelView):
 class JobModelView(ModelViewOnly):
     verbose_name_plural = "jobs"
     verbose_name = "job"
+    column_display_actions = False
     column_default_sort = ('start_date', True)
     column_filters = (
         'job_type', 'dag_id', 'state',
@@ -2325,6 +2363,7 @@ class DagRunModelView(ModelViewOnly):
 class LogModelView(ModelViewOnly):
     verbose_name_plural = "logs"
     verbose_name = "log"
+    column_display_actions = False
     column_default_sort = ('dttm', True)
     column_filters = ('dag_id', 'task_id', 'execution_date')
     column_formatters = dict(

@@ -42,7 +42,9 @@ class SparkSubmitHook(BaseHook):
     :type jars: str
     :param java_class: the main class of the Java application
     :type java_class: str
-    :param executor_cores: Number of cores per executor (Default: 2)
+    :param total_executor_cores: (Standalone & Mesos only) Total cores for all executors (Default: all the available cores on the worker)
+    :type total_executor_cores: int
+    :param executor_cores: (Standalone & YARN only) Number of cores per executor (Default: 2)
     :type executor_cores: int
     :param executor_memory: Memory per executor (e.g. 1000M, 2G) (Default: 1G)
     :type executor_memory: str
@@ -56,6 +58,8 @@ class SparkSubmitHook(BaseHook):
     :type name: str
     :param num_executors: Number of executors to launch
     :type num_executors: int
+    :param application_args: Arguments for the application being submitted
+    :type application_args: list
     :param verbose: Whether to pass the verbose flag to spark-submit process for debugging
     :type verbose: bool
     """
@@ -67,6 +71,7 @@ class SparkSubmitHook(BaseHook):
                  py_files=None,
                  jars=None,
                  java_class=None,
+                 total_executor_cores=None,
                  executor_cores=None,
                  executor_memory=None,
                  driver_memory=None,
@@ -74,6 +79,7 @@ class SparkSubmitHook(BaseHook):
                  principal=None,
                  name='default-name',
                  num_executors=None,
+                 application_args=None,
                  verbose=False):
         self._conf = conf
         self._conn_id = conn_id
@@ -81,6 +87,7 @@ class SparkSubmitHook(BaseHook):
         self._py_files = py_files
         self._jars = jars
         self._java_class = java_class
+        self._total_executor_cores = total_executor_cores
         self._executor_cores = executor_cores
         self._executor_memory = executor_memory
         self._driver_memory = driver_memory
@@ -88,6 +95,7 @@ class SparkSubmitHook(BaseHook):
         self._principal = principal
         self._name = name
         self._num_executors = num_executors
+        self._application_args = application_args
         self._verbose = verbose
         self._sp = None
         self._yarn_application_id = None
@@ -159,6 +167,8 @@ class SparkSubmitHook(BaseHook):
             connection_cmd += ["--jars", self._jars]
         if self._num_executors:
             connection_cmd += ["--num-executors", str(self._num_executors)]
+        if self._total_executor_cores:
+            connection_cmd += ["--total-executor-cores", str(self._total_executor_cores)]
         if self._executor_cores:
             connection_cmd += ["--executor-cores", str(self._executor_cores)]
         if self._executor_memory:
@@ -182,6 +192,11 @@ class SparkSubmitHook(BaseHook):
 
         # The actual script to execute
         connection_cmd += [application]
+
+        # Append any application arguments
+        if self._application_args:
+            for arg in self._application_args:
+                connection_cmd += [arg]
 
         logging.debug("Spark-Submit cmd: {}".format(connection_cmd))
 

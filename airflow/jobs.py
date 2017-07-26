@@ -35,7 +35,8 @@ import time
 from time import sleep
 
 import psutil
-from sqlalchemy import Column, Integer, String, DateTime, func, Index, or_
+from sqlalchemy import Column, Integer, String, DateTime, func, Index, or_, and_
+from sqlalchemy import update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.session import make_transient
 from tabulate import tabulate
@@ -928,45 +929,42 @@ class SchedulerJob(BaseJob):
         simple_dag_bag and with states in the old_state will be examined
         :type simple_dag_bag: SimpleDagBag
         """
+        tis_changed = 0
+        if self.using_sqlite:
+            tis_to_change = (
+                session
+                    .query(models.TaskInstance)
+                    .filter(models.TaskInstance.dag_id.in_(simple_dag_bag.dag_ids))
+                    .filter(models.TaskInstance.state.in_(old_states))
+                    .filter(and_(
+                        models.DagRun.dag_id == models.TaskInstance.dag_id,
+                        models.DagRun.execution_date == models.TaskInstance.execution_date,
+                        models.DagRun.state != State.RUNNING))
+                    .with_for_update()
+                    .all()
+            )
+            for ti in tis_to_change:
+                ti.set_state(new_state, session=session)
+                tis_changed += 1
+        else:
+            tis_changed = (
+                session
+                    .query(models.TaskInstance)
+                    .filter(models.TaskInstance.dag_id.in_(simple_dag_bag.dag_ids))
+                    .filter(models.TaskInstance.state.in_(old_states))
+                    .filter(and_(
+                        models.DagRun.dag_id == models.TaskInstance.dag_id,
+                        models.DagRun.execution_date == models.TaskInstance.execution_date,
+                        models.DagRun.state != State.RUNNING))
+                    .update({models.TaskInstance.state: new_state},
+                            synchronize_session=False)
+            )
+            session.commit()
 
-        task_instances_to_change = (
-            session
-            .query(models.TaskInstance)
-            .filter(models.TaskInstance.dag_id.in_(simple_dag_bag.dag_ids))
-            .filter(models.TaskInstance.state.in_(old_states))
-            .with_for_update()
-            .all()
-        )
-        """:type: list[TaskInstance]"""
-
-        for task_instance in task_instances_to_change:
-            dag_runs = DagRun.find(dag_id=task_instance.dag_id,
-                                   execution_date=task_instance.execution_date,
-                                   )
-
-            if len(dag_runs) == 0:
-                self.logger.warn("DagRun for %s %s does not exist",
-                                 task_instance.dag_id,
-                                 task_instance.execution_date)
-                continue
-
-            # There should only be one DAG run. Add some logging info if this
-            # is not the case for later debugging.
-            if len(dag_runs) > 1:
-                self.logger.warn("Multiple DagRuns found for {} {}: {}"
-                                 .format(task_instance.dag_id,
-                                         task_instance.execution_date,
-                                         dag_runs))
-
-            if not any(dag_run.state == State.RUNNING for dag_run in dag_runs):
-                self.logger.warn("Setting {} to state={} as it does not have "
-                                 "a DagRun in the {} state"
-                                 .format(task_instance,
-                                         new_state,
-                                         State.RUNNING))
-                task_instance.state = new_state
-                session.merge(task_instance)
-        session.commit()
+        if tis_changed > 0:
+            self.logger.warning("Set {} task instances to state={} as their associated "
+                                "DagRun was not in RUNNING state".format(
+                tis_changed, new_state))
 
     @provide_session
     def _execute_task_instances(self,
@@ -1064,11 +1062,12 @@ class SchedulerJob(BaseJob):
                 dag_id = task_instance.dag_id
 
                 if dag_id not in dag_id_to_possibly_running_task_count:
+                    # TODO(saguziel): also check against QUEUED state, see AIRFLOW-1104
                     dag_id_to_possibly_running_task_count[dag_id] = \
                         DAG.get_num_task_instances(
                             dag_id,
                             simple_dag_bag.get_dag(dag_id).task_ids,
-                            states=[State.RUNNING, State.QUEUED],
+                            states=[State.RUNNING],
                             session=session)
 
                 current_task_concurrency = dag_id_to_possibly_running_task_count[dag_id]
@@ -1669,7 +1668,8 @@ class BackfillJob(BaseJob):
 
     def _update_counters(self, started, succeeded, skipped, failed, tasks_to_run):
         """
-        Updates the counters per state of the tasks that were running
+        Updates the counters per state of the tasks that were running. Can re-add
+        to tasks to run in case required.
         :param started:
         :param succeeded:
         :param skipped:
@@ -1699,6 +1699,20 @@ class BackfillJob(BaseJob):
             elif ti.state == State.UP_FOR_RETRY:
                 self.logger.warning("Task instance {} is up for retry"
                                     .format(ti))
+                started.pop(key)
+                tasks_to_run[key] = ti
+            # special case: The state of the task can be set to NONE by the task itself
+            # when it reaches concurrency limits. It could also happen when the state
+            # is changed externally, e.g. by clearing tasks from the ui. We need to cover
+            # for that as otherwise those tasks would fall outside of the scope of
+            # the backfill suddenly.
+            elif ti.state == State.NONE:
+                self.logger.warning("FIXME: task instance {} state was set to "
+                                    "None externally or reaching concurrency limits. "
+                                    "Re-adding task to queue.".format(ti))
+                session = settings.Session()
+                ti.set_state(State.SCHEDULED, session=session)
+                session.close()
                 started.pop(key)
                 tasks_to_run[key] = ti
 
@@ -1910,19 +1924,23 @@ class BackfillJob(BaseJob):
                             verbose=True):
                         ti.refresh_from_db(lock_for_update=True, session=session)
                         if ti.state == State.SCHEDULED or ti.state == State.UP_FOR_RETRY:
-                            # Skip scheduled state, we are executing immediately
-                            ti.state = State.QUEUED
-                            session.merge(ti)
-                            self.logger.debug('Sending {} to executor'.format(ti))
-                            executor.queue_task_instance(
-                                ti,
-                                mark_success=self.mark_success,
-                                pickle_id=pickle_id,
-                                ignore_task_deps=self.ignore_task_deps,
-                                ignore_depends_on_past=ignore_depends_on_past,
-                                pool=self.pool)
-                            started[key] = ti
-                            tasks_to_run.pop(key)
+                            if executor.has_task(ti):
+                                self.logger.debug("Task Instance {} already in executor "
+                                                  "waiting for queue to clear".format(ti))
+                            else:
+                                self.logger.debug('Sending {} to executor'.format(ti))
+                                # Skip scheduled state, we are executing immediately
+                                ti.state = State.QUEUED
+                                session.merge(ti)
+                                executor.queue_task_instance(
+                                    ti,
+                                    mark_success=self.mark_success,
+                                    pickle_id=pickle_id,
+                                    ignore_task_deps=self.ignore_task_deps,
+                                    ignore_depends_on_past=ignore_depends_on_past,
+                                    pool=self.pool)
+                                started[key] = ti
+                                tasks_to_run.pop(key)
                         session.commit()
                         continue
 
