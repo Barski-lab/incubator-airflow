@@ -248,7 +248,8 @@ def do_setup():
             'zope.deprecation>=4.0, <5.0',
             'cwltool==1.0.20170622090721',
             'jsonmerge',
-            'mysql-python>=1.2.5'
+            'mysql-python>=1.2.5',
+            'ruamel.yaml<0.15'
         ],
         extras_require={
             'all': devel_all,
