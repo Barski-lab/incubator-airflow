@@ -7,6 +7,7 @@ from airflow.cwl_runner.cwldag import CWLDAG
 from airflow.cwl_runner.jobdispatcher import JobDispatcher
 from airflow.cwl_runner.jobcleanup import JobCleanup
 import glob
+import cwltool.errors
 import os
 import shutil
 import ruamel.yaml as yaml
@@ -15,6 +16,8 @@ import tempfile
 import re
 from airflow.cwl_runner.cwlutils import conf_get_default, get_only_files
 
+class SkipException(Exception):
+    pass
 
 def get_max_jobs_to_run():
     try:
@@ -51,8 +54,12 @@ def gen_dag_id (workflow_file, job_file):
 
 
 def make_dag(job_file, workflow_file):
-    with open(job_file, 'r') as f:
-        job = yaml.safe_load(f)
+    try:
+        with open(job_file, 'r') as f:
+            job = yaml.safe_load(f)
+    except IOError as ex:
+        raise SkipException ("Job file of finished workflow was deleted by its jobcleanup task: "+str(ex))
+
     dag_id = gen_dag_id(workflow_file, job_file)
 
     start_day = datetime.fromtimestamp(os.path.getctime(job_file))
@@ -151,7 +158,7 @@ def find_workflow(job_filename):
     for key in sorted(all_workflows, key=len, reverse=True):
         if re.match(os.path.splitext(key)[0], os.path.basename(job_filename)):
             return all_workflows[key]
-    raise ValueError
+    raise cwltool.errors.WorkflowException("Correspondent workflow is not found")
 
 
 def get_jobs_folder_structure(monitor_folder):
@@ -191,6 +198,8 @@ if tot_files_run < max_jobs_to_run and tot_files_new > 0:
 for fn in get_only_files(jobs_list, key="running"):
     try:
         make_dag(fn, find_workflow(fn))
-    except ValueError:
+    except SkipException:
+        pass
+    except Exception:
         shutil.move(fn, os.path.join('/'.join(fn.split('/')[0:-2]), 'fail'))
 
